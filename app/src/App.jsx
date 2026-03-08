@@ -4,13 +4,19 @@ import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
 import LegendPanel from './components/LegendPanel'
 import { mockLayers } from './modules/layers'
-import { basemapOptions, defaultBasemapId } from './modules/maps'
+import {
+  basemapOptions,
+  defaultBasemapId,
+  defaultWorkModeId,
+  workModes,
+} from './modules/maps'
 
 function App() {
   const [layers, setLayers] = useState(() =>
     mockLayers.map((layer) => ({ ...layer })),
   )
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
+  const [activeWorkModeId, setActiveWorkModeId] = useState(defaultWorkModeId)
 
   const visibleLayers = useMemo(
     () => layers.filter((layer) => layer.visible),
@@ -47,6 +53,9 @@ function App() {
         <MapCanvas
           visibleLayers={visibleLayers}
           selectedBasemap={selectedBasemap}
+          activeWorkModeId={activeWorkModeId}
+          workModes={workModes}
+          onWorkModeChange={setActiveWorkModeId}
         />
         <LegendPanel layers={layers} />
       </main>
