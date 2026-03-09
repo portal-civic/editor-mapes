@@ -50,8 +50,8 @@ function MapCanvas({
             center={point.coordinates}
             radius={7}
             pathOptions={{
-              color: '#d4335b',
-              fillColor: '#d4335b',
+              color: point.color || '#d4335b',
+              fillColor: point.color || '#d4335b',
               fillOpacity: 0.9,
               weight: 2,
             }}

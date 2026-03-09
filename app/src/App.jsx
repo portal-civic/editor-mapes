@@ -7,35 +7,83 @@ import MapToolbarSimple from './components/MapToolbarSimple'
 import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
 
-const POINT_LAYER_ID = 'punts'
 const INITIAL_POINT_FEATURES = [
   { id: 'pt-madrid', name: 'Madrid', coordinates: [40.4168, -3.7038] },
   { id: 'pt-valencia', name: 'València', coordinates: [39.4699, -0.3763] },
   { id: 'pt-zaragoza', name: 'Saragossa', coordinates: [41.6488, -0.8891] },
 ]
 
-function ensurePointLayer(layers) {
-  const existingPointLayer =
-    layers.find((layer) => layer.id === POINT_LAYER_ID) ||
-    layers.find((layer) => layer.geometryType === 'point')
+function ensureInitialPointLayer(layers) {
+  const hasDefaultPointLayer = layers.some((layer) => layer.id === 'punts')
+  if (hasDefaultPointLayer) {
+    return layers
+  }
 
-  const existingFeatures = Array.isArray(existingPointLayer?.features)
-    ? existingPointLayer.features
-    : []
+  const firstPointLayer = layers.find((layer) => layer.geometryType === 'point')
+  if (firstPointLayer) {
+    const existingFeatures = Array.isArray(firstPointLayer.features)
+      ? firstPointLayer.features
+      : []
+
+    return layers.map((layer) =>
+      layer.id === firstPointLayer.id
+        ? {
+            ...layer,
+            id: 'punts',
+            name: 'Punts',
+            color: layer.color || '#d4335b',
+            geometryType: 'point',
+            visible: true,
+            legendLabel: 'Punts',
+            features:
+              existingFeatures.length > 0
+                ? existingFeatures
+                : INITIAL_POINT_FEATURES,
+          }
+        : layer,
+    )
+  }
 
   return [
-    ...layers.filter((layer) => layer.geometryType !== 'point'),
+    ...layers,
     {
-      id: POINT_LAYER_ID,
+      id: 'punts',
       name: 'Punts',
       color: '#d4335b',
       geometryType: 'point',
-      visible: existingPointLayer?.visible ?? true,
+      visible: true,
       legendLabel: 'Punts',
-      features:
-        existingFeatures.length > 0 ? existingFeatures : INITIAL_POINT_FEATURES,
+      features: INITIAL_POINT_FEATURES,
     },
   ]
+}
+
+function getNextPointLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nova capa (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nova capa ${nextIndex}`
+}
+
+function getPointLayerForNewPoint(layers, activePointLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activePointLayerId && layer.geometryType === 'point',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visiblePointLayers = layers.filter(
+    (layer) => layer.geometryType === 'point' && layer.visible,
+  )
+
+  return visiblePointLayers[visiblePointLayers.length - 1] || null
 }
 
 function App() {
@@ -45,10 +93,11 @@ function App() {
       features: Array.isArray(layer.features) ? [...layer.features] : [],
     }))
 
-    return ensurePointLayer(seededLayers)
+    return ensureInitialPointLayer(seededLayers)
   })
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
+  const [activePointLayerId, setActivePointLayerId] = useState('punts')
 
   const selectedBasemap = useMemo(
     () =>
@@ -57,18 +106,19 @@ function App() {
     [selectedBasemapId],
   )
 
-  const pointLayer = useMemo(
-    () => layers.find((layer) => layer.id === POINT_LAYER_ID),
+  const visiblePointFeatures = useMemo(
+    () =>
+      layers
+        .filter((layer) => layer.geometryType === 'point' && layer.visible)
+        .flatMap((layer) => {
+          const features = Array.isArray(layer.features) ? layer.features : []
+          return features.map((feature) => ({
+            ...feature,
+            color: layer.color,
+          }))
+        }),
     [layers],
   )
-
-  const visiblePointFeatures = useMemo(() => {
-    if (!pointLayer?.visible) {
-      return []
-    }
-
-    return Array.isArray(pointLayer.features) ? pointLayer.features : []
-  }, [pointLayer])
 
   const handleLayerVisibilityChange = (layerId, isVisible) => {
     setLayers((currentLayers) =>
@@ -78,10 +128,37 @@ function App() {
     )
   }
 
+  const handleCreatePointLayer = () => {
+    const nextLayerId = `point-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    setActivePointLayerId(nextLayerId)
+    setLayers((currentLayers) => {
+      const nextLayerName = getNextPointLayerName(currentLayers)
+
+      return [
+        ...currentLayers,
+        {
+          id: nextLayerId,
+          name: nextLayerName,
+          color: '#d4335b',
+          geometryType: 'point',
+          visible: true,
+          legendLabel: nextLayerName,
+          features: [],
+        },
+      ]
+    })
+  }
+
   const handleMapPointAdd = (coordinates) => {
-    setLayers((currentLayers) =>
-      currentLayers.map((layer) => {
-        if (layer.id !== POINT_LAYER_ID) {
+    setLayers((currentLayers) => {
+      const targetLayer = getPointLayerForNewPoint(currentLayers, activePointLayerId)
+
+      if (!targetLayer) {
+        return currentLayers
+      }
+
+      return currentLayers.map((layer) => {
+        if (layer.id !== targetLayer.id) {
           return layer
         }
 
@@ -99,7 +176,33 @@ function App() {
             },
           ],
         }
-      }),
+      })
+    })
+  }
+
+  const handleRenamePointLayer = (layerId) => {
+    const layerToRename = layers.find(
+      (layer) => layer.id === layerId && layer.geometryType === 'point',
+    )
+
+    if (!layerToRename) {
+      return
+    }
+
+    const nextName = window.prompt('Nou nom de la capa', layerToRename.name)
+    if (nextName === null) {
+      return
+    }
+
+    const trimmedName = nextName.trim()
+    if (!trimmedName) {
+      return
+    }
+
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) =>
+        layer.id === layerId ? { ...layer, name: trimmedName } : layer,
+      ),
     )
   }
 
@@ -114,7 +217,11 @@ function App() {
       <main className="workspace">
         <LayersPanel
           layers={layers}
+          activePointLayerId={activePointLayerId}
+          onSetActivePointLayer={setActivePointLayerId}
           onLayerVisibilityChange={handleLayerVisibilityChange}
+          onCreatePointLayer={handleCreatePointLayer}
+          onRenamePointLayer={handleRenamePointLayer}
         />
         <section className="map-workspace">
           <MapToolbarSimple
