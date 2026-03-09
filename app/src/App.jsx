@@ -115,6 +115,7 @@ function App() {
           return features.map((feature) => ({
             ...feature,
             color: layer.color,
+            layerId: layer.id,
           }))
         }),
     [layers],
@@ -180,6 +181,22 @@ function App() {
     })
   }
 
+  const handleMapPointDelete = ({ layerId, pointId }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'point') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.filter((feature) => feature.id !== pointId),
+        }
+      }),
+    )
+  }
+
   const handleRenamePointLayer = (layerId) => {
     const layerToRename = layers.find(
       (layer) => layer.id === layerId && layer.geometryType === 'point',
@@ -233,6 +250,7 @@ function App() {
             activeWorkModeId={activeWorkModeId}
             pointFeatures={visiblePointFeatures}
             onPointAdd={handleMapPointAdd}
+            onPointDelete={handleMapPointDelete}
           />
         </section>
         <LegendPanel layers={layers} />

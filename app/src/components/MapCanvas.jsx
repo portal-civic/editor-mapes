@@ -25,11 +25,28 @@ function MapCanvas({
   activeWorkModeId = 'select',
   pointFeatures = [],
   onPointAdd,
+  onPointDelete,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
   const isPointMode = activeWorkModeId === 'point'
+  const isSelectMode = activeWorkModeId === 'select'
+
+  const handlePointClick = (point, event) => {
+    if (!isSelectMode) {
+      return
+    }
+
+    event.originalEvent?.stopPropagation()
+
+    const shouldDelete = window.confirm('Eliminar punt?')
+    if (!shouldDelete) {
+      return
+    }
+
+    onPointDelete?.({ layerId: point.layerId, pointId: point.id })
+  }
 
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
@@ -49,6 +66,9 @@ function MapCanvas({
             key={point.id}
             center={point.coordinates}
             radius={7}
+            eventHandlers={{
+              click: (event) => handlePointClick(point, event),
+            }}
             pathOptions={{
               color: point.color || '#d4335b',
               fillColor: point.color || '#d4335b',
