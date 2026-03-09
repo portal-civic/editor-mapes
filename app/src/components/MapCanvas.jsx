@@ -1,4 +1,12 @@
-import { CircleMarker, MapContainer, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
+import { useEffect } from 'react'
+import {
+  CircleMarker,
+  MapContainer,
+  TileLayer,
+  ZoomControl,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
 import MapToolbar from './MapToolbar'
 
 function PointDrawHandler({ isPointMode, onPointAdd }) {
@@ -12,6 +20,43 @@ function PointDrawHandler({ isPointMode, onPointAdd }) {
       onPointAdd?.({ lat, lng })
     },
   })
+
+  return null
+}
+
+function MapInteractionController({ activeWorkModeId }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const isPointMode = activeWorkModeId === 'point'
+    const container = map.getContainer()
+
+    if (isPointMode) {
+      map.dragging.disable()
+      container.style.cursor = 'crosshair'
+    } else {
+      map.dragging.enable()
+      container.style.cursor = ''
+    }
+
+    return () => {
+      map.dragging.enable()
+      container.style.cursor = ''
+    }
+  }, [activeWorkModeId, map])
+
+  return null
+}
+
+function MapInitialSizeSync() {
+  const map = useMap()
+
+  useEffect(() => {
+    const frameId = requestAnimationFrame(() => {
+      map.invalidateSize()
+    })
+    return () => cancelAnimationFrame(frameId)
+  }, [map])
 
   return null
 }
@@ -78,6 +123,8 @@ function MapCanvas({
         zoomControl={false}
         className="map-canvas"
       >
+        <MapInitialSizeSync />
+        <MapInteractionController activeWorkModeId={activeWorkModeId} />
         <PointDrawHandler
           isPointMode={activeWorkModeId === 'point'}
           onPointAdd={onPointAdd}
