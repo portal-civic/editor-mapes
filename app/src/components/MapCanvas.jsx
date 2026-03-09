@@ -18,9 +18,13 @@ const TEST_POINTS = [
   { id: 'test-zaragoza', coordinates: [41.6488, -0.8891] },
 ]
 
-function ClickToAddPoint({ onMapClick }) {
+function ClickToAddPoint({ canAddPoint, onMapClick }) {
   useMapEvents({
     click(event) {
+      if (!canAddPoint) {
+        return
+      }
+
       const { lat, lng } = event.latlng
       onMapClick([lat, lng])
     },
@@ -29,11 +33,12 @@ function ClickToAddPoint({ onMapClick }) {
   return null
 }
 
-function MapCanvas({ selectedBasemap }) {
+function MapCanvas({ selectedBasemap, activeWorkModeId = 'select' }) {
   const [clickedPoints, setClickedPoints] = useState([])
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
+  const isPointMode = activeWorkModeId === 'point'
 
   const handleMapClick = (coordinates) => {
     setClickedPoints((currentPoints) => [
@@ -52,8 +57,9 @@ function MapCanvas({ selectedBasemap }) {
         zoom={DEFAULT_ZOOM}
         zoomControl={false}
         className="map-canvas"
+        style={{ cursor: isPointMode ? 'crosshair' : '' }}
       >
-        <ClickToAddPoint onMapClick={handleMapClick} />
+        <ClickToAddPoint canAddPoint={isPointMode} onMapClick={handleMapClick} />
         <ZoomControl position="topright" />
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
 

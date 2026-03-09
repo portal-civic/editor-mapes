@@ -4,12 +4,7 @@ import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
 import LegendPanel from './components/LegendPanel'
 import { mockLayers } from './modules/layers'
-import {
-  basemapOptions,
-  defaultBasemapId,
-  defaultWorkModeId,
-  workModes,
-} from './modules/maps'
+import { basemapOptions, defaultBasemapId } from './modules/maps'
 
 function ensureInitialPointLayer(layers) {
   const hasVisiblePointLayer = layers.some(
@@ -50,12 +45,8 @@ function App() {
     return ensureInitialPointLayer(seededLayers)
   })
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
-  const [activeWorkModeId, setActiveWorkModeId] = useState(defaultWorkModeId)
+  const [activeWorkModeId, setActiveWorkModeId] = useState('select')
 
-  const visibleLayers = useMemo(
-    () => layers.filter((layer) => layer.visible),
-    [layers],
-  )
   const selectedBasemap = useMemo(
     () =>
       basemapOptions.find((basemap) => basemap.id === selectedBasemapId) ||
@@ -71,34 +62,6 @@ function App() {
     )
   }
 
-  const handleMapPointAdd = ({ lat, lng }) => {
-    setLayers((currentLayers) => {
-      const targetPointLayer = currentLayers.find(
-        (layer) => layer.geometryType === 'point' && layer.visible,
-      )
-
-      if (!targetPointLayer) {
-        return currentLayers
-      }
-
-      const currentFeatures = Array.isArray(targetPointLayer.features)
-        ? targetPointLayer.features
-        : []
-      const pointIndex = currentFeatures.length + 1
-      const pointFeature = {
-        id: `pt-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-        name: `Punt ${pointIndex}`,
-        coordinates: [lat, lng],
-      }
-
-      return currentLayers.map((layer) =>
-        layer.id === targetPointLayer.id
-          ? { ...layer, features: [...currentFeatures, pointFeature] }
-          : layer,
-      )
-    })
-  }
-
   return (
     <div className="editor-shell">
       <TopBar
@@ -112,14 +75,28 @@ function App() {
           layers={layers}
           onLayerVisibilityChange={handleLayerVisibilityChange}
         />
-        <MapCanvas
-          visibleLayers={visibleLayers}
-          selectedBasemap={selectedBasemap}
-          activeWorkModeId={activeWorkModeId}
-          workModes={workModes}
-          onWorkModeChange={setActiveWorkModeId}
-          onPointAdd={handleMapPointAdd}
-        />
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div>
+            <button
+              type="button"
+              onClick={() => setActiveWorkModeId('select')}
+              className={activeWorkModeId === 'select' ? 'primary' : ''}
+            >
+              Select
+            </button>{' '}
+            <button
+              type="button"
+              onClick={() => setActiveWorkModeId('point')}
+              className={activeWorkModeId === 'point' ? 'primary' : ''}
+            >
+              Point
+            </button>
+          </div>
+          <MapCanvas
+            selectedBasemap={selectedBasemap}
+            activeWorkModeId={activeWorkModeId}
+          />
+        </section>
         <LegendPanel layers={layers} />
       </main>
     </div>
