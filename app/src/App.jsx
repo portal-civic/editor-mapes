@@ -3,6 +3,7 @@ import TopBar from './components/TopBar'
 import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
 import LegendPanel from './components/LegendPanel'
+import MapToolbarSimple from './components/MapToolbarSimple'
 import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
 
@@ -75,23 +76,11 @@ function App() {
           layers={layers}
           onLayerVisibilityChange={handleLayerVisibilityChange}
         />
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div>
-            <button
-              type="button"
-              onClick={() => setActiveWorkModeId('select')}
-              className={activeWorkModeId === 'select' ? 'primary' : ''}
-            >
-              Select
-            </button>{' '}
-            <button
-              type="button"
-              onClick={() => setActiveWorkModeId('point')}
-              className={activeWorkModeId === 'point' ? 'primary' : ''}
-            >
-              Point
-            </button>
-          </div>
+        <section className="map-workspace">
+          <MapToolbarSimple
+            activeWorkModeId={activeWorkModeId}
+            onModeChange={setActiveWorkModeId}
+          />
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}

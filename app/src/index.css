@@ -311,7 +311,7 @@ button.primary {
     grid-area: right;
   }
 
-  .map-stage {
+  .map-workspace {
     grid-area: map;
   }
 }
@@ -346,4 +346,20 @@ button.primary {
   .map-active-layers {
     top: 110px;
   }
+}
+.map-workspace {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-toolbar-simple {
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
 }
