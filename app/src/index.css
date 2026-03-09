@@ -281,6 +281,12 @@ button.primary {
   color: #334155;
 }
 
+.map-points-indicator {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
 .map-canvas {
   width: 100%;
   height: 100%;

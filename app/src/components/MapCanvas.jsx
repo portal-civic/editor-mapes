@@ -1,5 +1,20 @@
-import { MapContainer, TileLayer, ZoomControl } from 'react-leaflet'
+import { CircleMarker, MapContainer, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
 import MapToolbar from './MapToolbar'
+
+function PointDrawHandler({ isPointMode, onPointAdd }) {
+  useMapEvents({
+    click(event) {
+      if (!isPointMode) {
+        return
+      }
+
+      const { lat, lng } = event.latlng
+      onPointAdd?.({ lat, lng })
+    },
+  })
+
+  return null
+}
 
 function MapCanvas({
   visibleLayers = [],
@@ -7,9 +22,23 @@ function MapCanvas({
   activeWorkModeId,
   workModes = [],
   onWorkModeChange,
+  onPointAdd,
 }) {
   const activeMode =
     workModes.find((mode) => mode.id === activeWorkModeId) || workModes[0]
+  const visiblePointLayers = visibleLayers.filter(
+    (layer) => layer.geometryType === 'point',
+  )
+  const pointFeatures = visiblePointLayers.flatMap((layer) => {
+    const features = Array.isArray(layer.features) ? layer.features : []
+    return features
+      .filter((feature) => Array.isArray(feature.coordinates))
+      .map((feature) => ({
+        ...feature,
+        layerId: layer.id,
+        color: layer.color,
+      }))
+  })
 
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
@@ -39,6 +68,9 @@ function MapCanvas({
         <p className="map-mode-indicator">
           Mode actual: <strong>{activeMode?.label || '-'}</strong>
         </p>
+        <p className="map-points-indicator">
+          Punts visibles: <strong>{pointFeatures.length}</strong>
+        </p>
       </aside>
       <MapContainer
         center={[40.4168, -3.7038]}
@@ -46,6 +78,10 @@ function MapCanvas({
         zoomControl={false}
         className="map-canvas"
       >
+        <PointDrawHandler
+          isPointMode={activeWorkModeId === 'point'}
+          onPointAdd={onPointAdd}
+        />
         <ZoomControl position="topright" />
         <TileLayer
           key={selectedBasemap?.id}
@@ -53,6 +89,19 @@ function MapCanvas({
           url={selectedBasemap?.url}
           maxZoom={selectedBasemap?.maxZoom}
         />
+        {pointFeatures.map((feature) => (
+          <CircleMarker
+            key={feature.id}
+            center={feature.coordinates}
+            radius={7}
+            pathOptions={{
+              color: feature.color,
+              fillColor: feature.color,
+              fillOpacity: 0.9,
+              weight: 2,
+            }}
+          />
+        ))}
       </MapContainer>
     </section>
   )

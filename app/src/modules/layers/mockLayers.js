@@ -22,5 +22,6 @@ export const mockLayers = [
     geometryType: 'point',
     visible: false,
     legendLabel: 'Equipaments i punts d’interés',
+    features: [],
   },
 ]
