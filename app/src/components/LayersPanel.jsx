@@ -20,7 +20,10 @@ function LayersPanel({
           const isActivePointLayer = isPointLayer && layer.id === activePointLayerId
 
           return (
-            <article key={layer.id} className="layer-item">
+            <article
+              key={layer.id}
+              className={`layer-item ${isActivePointLayer ? 'layer-item-active' : ''}`}
+            >
               <div className="layer-item-main">
                 <span
                   className="layer-swatch"
@@ -34,15 +37,16 @@ function LayersPanel({
               </p>
               {isPointLayer ? (
                 <>
-                  <label className="layer-toggle">
-                    <input
-                      type="radio"
-                      name="active-point-layer"
-                      checked={isActivePointLayer}
-                      onChange={() => onSetActivePointLayer?.(layer.id)}
-                    />
-                    <span>Capa activa</span>
-                  </label>
+                  {isActivePointLayer ? (
+                    <p className="layer-active-indicator">Activa</p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSetActivePointLayer?.(layer.id)}
+                    >
+                      Activar
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onRenamePointLayer?.(layer.id)}
