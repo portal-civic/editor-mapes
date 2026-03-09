@@ -1,4 +1,11 @@
-import { CircleMarker, MapContainer, TileLayer, ZoomControl } from 'react-leaflet'
+import { useState } from 'react'
+import {
+  CircleMarker,
+  MapContainer,
+  TileLayer,
+  ZoomControl,
+  useMapEvents,
+} from 'react-leaflet'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -11,10 +18,32 @@ const TEST_POINTS = [
   { id: 'test-zaragoza', coordinates: [41.6488, -0.8891] },
 ]
 
+function ClickToAddPoint({ onMapClick }) {
+  useMapEvents({
+    click(event) {
+      const { lat, lng } = event.latlng
+      onMapClick([lat, lng])
+    },
+  })
+
+  return null
+}
+
 function MapCanvas({ selectedBasemap }) {
+  const [clickedPoints, setClickedPoints] = useState([])
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
+
+  const handleMapClick = (coordinates) => {
+    setClickedPoints((currentPoints) => [
+      ...currentPoints,
+      {
+        id: `click-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+        coordinates,
+      },
+    ])
+  }
 
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
@@ -24,8 +53,10 @@ function MapCanvas({ selectedBasemap }) {
         zoomControl={false}
         className="map-canvas"
       >
+        <ClickToAddPoint onMapClick={handleMapClick} />
         <ZoomControl position="topright" />
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
+
         {TEST_POINTS.map((point) => (
           <CircleMarker
             key={point.id}
@@ -35,6 +66,20 @@ function MapCanvas({ selectedBasemap }) {
               color: '#0f4c81',
               fillColor: '#0f4c81',
               fillOpacity: 0.85,
+              weight: 2,
+            }}
+          />
+        ))}
+
+        {clickedPoints.map((point) => (
+          <CircleMarker
+            key={point.id}
+            center={point.coordinates}
+            radius={7}
+            pathOptions={{
+              color: '#d4335b',
+              fillColor: '#d4335b',
+              fillOpacity: 0.9,
               weight: 2,
             }}
           />
