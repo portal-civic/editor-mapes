@@ -7,31 +7,33 @@ import MapToolbarSimple from './components/MapToolbarSimple'
 import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
 
-function ensureInitialPointLayer(layers) {
-  const hasVisiblePointLayer = layers.some(
-    (layer) => layer.geometryType === 'point' && layer.visible,
-  )
+const POINT_LAYER_ID = 'punts'
+const INITIAL_POINT_FEATURES = [
+  { id: 'pt-madrid', name: 'Madrid', coordinates: [40.4168, -3.7038] },
+  { id: 'pt-valencia', name: 'València', coordinates: [39.4699, -0.3763] },
+  { id: 'pt-zaragoza', name: 'Saragossa', coordinates: [41.6488, -0.8891] },
+]
 
-  if (hasVisiblePointLayer) {
-    return layers
-  }
+function ensurePointLayer(layers) {
+  const existingPointLayer =
+    layers.find((layer) => layer.id === POINT_LAYER_ID) ||
+    layers.find((layer) => layer.geometryType === 'point')
+
+  const existingFeatures = Array.isArray(existingPointLayer?.features)
+    ? existingPointLayer.features
+    : []
 
   return [
-    ...layers,
+    ...layers.filter((layer) => layer.geometryType !== 'point'),
     {
-      id: 'punts-prova',
-      name: 'Punts de prova',
+      id: POINT_LAYER_ID,
+      name: 'Punts',
       color: '#d4335b',
       geometryType: 'point',
-      visible: true,
-      legendLabel: 'Punts de prova',
-      features: [
-        {
-          id: 'pt-prova-1',
-          name: 'Punt inicial',
-          coordinates: [40.4168, -3.7038],
-        },
-      ],
+      visible: existingPointLayer?.visible ?? true,
+      legendLabel: 'Punts',
+      features:
+        existingFeatures.length > 0 ? existingFeatures : INITIAL_POINT_FEATURES,
     },
   ]
 }
@@ -43,7 +45,7 @@ function App() {
       features: Array.isArray(layer.features) ? [...layer.features] : [],
     }))
 
-    return ensureInitialPointLayer(seededLayers)
+    return ensurePointLayer(seededLayers)
   })
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
@@ -55,11 +57,49 @@ function App() {
     [selectedBasemapId],
   )
 
+  const pointLayer = useMemo(
+    () => layers.find((layer) => layer.id === POINT_LAYER_ID),
+    [layers],
+  )
+
+  const visiblePointFeatures = useMemo(() => {
+    if (!pointLayer?.visible) {
+      return []
+    }
+
+    return Array.isArray(pointLayer.features) ? pointLayer.features : []
+  }, [pointLayer])
+
   const handleLayerVisibilityChange = (layerId, isVisible) => {
     setLayers((currentLayers) =>
       currentLayers.map((layer) =>
         layer.id === layerId ? { ...layer, visible: isVisible } : layer,
       ),
+    )
+  }
+
+  const handleMapPointAdd = (coordinates) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== POINT_LAYER_ID) {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        const pointIndex = currentFeatures.length + 1
+
+        return {
+          ...layer,
+          features: [
+            ...currentFeatures,
+            {
+              id: `pt-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              name: `Punt ${pointIndex}`,
+              coordinates,
+            },
+          ],
+        }
+      }),
     )
   }
 
@@ -84,6 +124,8 @@ function App() {
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}
+            pointFeatures={visiblePointFeatures}
+            onPointAdd={handleMapPointAdd}
           />
         </section>
         <LegendPanel layers={layers} />
