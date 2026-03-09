@@ -16,7 +16,7 @@ function LegendPanel({ layers = [] }) {
                 style={{ backgroundColor: layer.color }}
                 aria-hidden="true"
               />
-              <p className="layer-name">{layer.legendLabel}</p>
+              <p className="layer-name">{layer.name || layer.legendLabel}</p>
             </div>
             <p className="layer-meta">{layer.geometryType}</p>
           </article>
