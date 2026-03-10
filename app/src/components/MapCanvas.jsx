@@ -194,13 +194,30 @@ function MapCanvas({
   const recentlyDraggedPointKeysRef = useRef(new Set())
   const [hoverLatLng, setHoverLatLng] = useState(null)
 
-  const createPointIcon = (color) =>
-    L.divIcon({
+  const createPointIcon = (style) => {
+    const radius = Math.max(1, Number(style?.radius) || 7)
+    const diameter = radius * 2
+    const fillColor = style?.fillColor || '#d4335b'
+    const fillOpacity =
+      Number.isFinite(Number(style?.fillOpacity)) ? Number(style.fillOpacity) : 0.9
+    const strokeColor = style?.strokeColor || '#d4335b'
+    const strokeWidth =
+      Number.isFinite(Number(style?.strokeWidth)) ? Number(style.strokeWidth) : 2
+    const strokeOpacity =
+      Number.isFinite(Number(style?.strokeOpacity))
+        ? Number(style.strokeOpacity)
+        : 1
+
+    return L.divIcon({
       className: '',
-      html: `<span style="display:block;width:14px;height:14px;border-radius:999px;border:2px solid ${color};background:${color};opacity:0.9;"></span>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
+      html: `<svg width="${diameter}" height="${diameter}" viewBox="0 0 ${diameter} ${diameter}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${Math.max(
+        radius - strokeWidth / 2,
+        0,
+      )}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" /></svg>`,
+      iconSize: [diameter, diameter],
+      iconAnchor: [radius, radius],
     })
+  }
 
   const handlePointClick = (point, event) => {
     if (!isSelectMode && !isDeleteMode) {
@@ -367,8 +384,12 @@ function MapCanvas({
             key={`${lineFeature.layerId}-${lineFeature.id}`}
             positions={lineFeature.latlngs}
             pathOptions={{
-              color: lineFeature.color || '#ea8b1f',
-              weight: isSelectMode || isDeleteMode ? 8 : 3,
+              color: lineFeature.style?.color || '#ea8b1f',
+              weight:
+                isSelectMode || isDeleteMode
+                  ? Math.max((lineFeature.style?.width || 3) + 4, 7)
+                  : lineFeature.style?.width || 3,
+              opacity: lineFeature.style?.opacity ?? 1,
             }}
             interactive
             bubblingMouseEvents={false}
@@ -408,11 +429,13 @@ function MapCanvas({
             <Polygon
               positions={polygonFeature.latlngs}
               pathOptions={{
-                color: polygonFeature.color || '#2f7de1',
-                weight: 2,
-                fillColor: polygonFeature.color || '#2f7de1',
+                color: polygonFeature.style?.strokeColor || '#2f7de1',
+                stroke: (polygonFeature.style?.strokeWidth ?? 2) > 0,
+                weight: polygonFeature.style?.strokeWidth ?? 2,
+                opacity: polygonFeature.style?.strokeOpacity ?? 1,
+                fillColor: polygonFeature.style?.fillColor || '#2f7de1',
                 fill: true,
-                fillOpacity: 0.18,
+                fillOpacity: polygonFeature.style?.fillOpacity ?? 0.18,
               }}
               interactive={false}
             />
@@ -497,7 +520,7 @@ function MapCanvas({
           <Marker
             key={`${point.layerId}-${point.id}`}
             position={point.coordinates}
-            icon={createPointIcon(point.color || '#d4335b')}
+            icon={createPointIcon(point.style)}
             draggable={isSelectMode}
             eventHandlers={{
               click: (event) => handlePointClick(point, event),

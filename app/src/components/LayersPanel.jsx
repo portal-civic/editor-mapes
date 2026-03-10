@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 function LayersPanel({
   layers = [],
   activePointLayerId,
@@ -12,7 +14,10 @@ function LayersPanel({
   onCreatePolygonLayer,
   onRenameLayer,
   onDeleteLayer,
+  onLayerStyleChange,
 }) {
+  const [openStyleLayerId, setOpenStyleLayerId] = useState(null)
+
   return (
     <aside className="panel panel-left">
       <div className="panel-header">
@@ -40,6 +45,15 @@ function LayersPanel({
             isPolygonLayer && layer.id === activePolygonLayerId
           const isActiveVectorLayer =
             isActivePointLayer || isActiveLineLayer || isActivePolygonLayer
+          const isStyleOpen = openStyleLayerId === layer.id
+          const layerStyle = layer.style || {}
+          const swatchColor = isPointLayer
+            ? layerStyle.fillColor || layer.color
+            : isLineLayer
+              ? layerStyle.color || layer.color
+              : isPolygonLayer
+                ? layerStyle.fillColor || layer.color
+                : layer.color
 
           return (
             <article
@@ -49,7 +63,7 @@ function LayersPanel({
               <div className="layer-item-main">
                 <span
                   className="layer-swatch"
-                  style={{ backgroundColor: layer.color }}
+                  style={{ backgroundColor: swatchColor }}
                   aria-hidden="true"
                 />
                 <p className="layer-name">{layer.name}</p>
@@ -85,7 +99,226 @@ function LayersPanel({
                   <button type="button" onClick={() => onDeleteLayer?.(layer.id)}>
                     Eliminar
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenStyleLayerId((currentId) =>
+                        currentId === layer.id ? null : layer.id,
+                      )
+                    }
+                  >
+                    Estil
+                  </button>
                 </>
+              ) : null}
+              {isStyleOpen && (isPointLayer || isLineLayer || isPolygonLayer) ? (
+                <div className="layer-style-editor">
+                  {isPointLayer ? (
+                    <>
+                      <label>
+                        Radi
+                        <input
+                          type="number"
+                          min="1"
+                          max="24"
+                          value={layerStyle.radius ?? 7}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              radius: Number(event.target.value) || 1,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Color interior
+                        <input
+                          type="color"
+                          value={layerStyle.fillColor ?? '#d4335b'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              fillColor: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Opacitat interior
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layerStyle.fillOpacity ?? 0.9}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              fillOpacity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Color contorn
+                        <input
+                          type="color"
+                          value={layerStyle.strokeColor ?? '#d4335b'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeColor: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Gruix contorn
+                        <input
+                          type="number"
+                          min="0"
+                          max="12"
+                          value={layerStyle.strokeWidth ?? 2}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeWidth: Number(event.target.value) || 0,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Opacitat contorn
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layerStyle.strokeOpacity ?? 1}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeOpacity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  ) : null}
+
+                  {isLineLayer ? (
+                    <>
+                      <label>
+                        Color
+                        <input
+                          type="color"
+                          value={layerStyle.color ?? '#ea8b1f'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              color: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Gruix
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={layerStyle.width ?? 3}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              width: Number(event.target.value) || 1,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Opacitat
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layerStyle.opacity ?? 1}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              opacity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  ) : null}
+
+                  {isPolygonLayer ? (
+                    <>
+                      <label>
+                        Color vora
+                        <input
+                          type="color"
+                          value={layerStyle.strokeColor ?? '#2f7de1'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeColor: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Gruix vora
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          value={layerStyle.strokeWidth ?? 2}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeWidth: Number(event.target.value) || 0,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Opacitat vora
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layerStyle.strokeOpacity ?? 1}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              strokeOpacity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Color interior
+                        <input
+                          type="color"
+                          value={layerStyle.fillColor ?? '#2f7de1'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              fillColor: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Opacitat interior
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layerStyle.fillOpacity ?? 0.18}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              fillOpacity: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                </div>
               ) : null}
               <label className="layer-toggle">
                 <input

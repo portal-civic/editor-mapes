@@ -9,16 +9,71 @@ import { basemapOptions, defaultBasemapId } from './modules/maps'
 
 const DEFAULT_MAP_CENTER = [40.4168, -3.7038]
 const DEFAULT_MAP_ZOOM = 6
+const DEFAULT_LAYER_COLORS = {
+  point: '#d4335b',
+  line: '#ea8b1f',
+  polygon: '#2f7de1',
+}
 const INITIAL_POINT_FEATURES = [
   { id: 'pt-madrid', name: 'Madrid', label: '', coordinates: [40.4168, -3.7038] },
   { id: 'pt-valencia', name: 'València', label: '', coordinates: [39.4699, -0.3763] },
   { id: 'pt-zaragoza', name: 'Saragossa', label: '', coordinates: [41.6488, -0.8891] },
 ]
 
+function getDefaultLayerStyle(geometryType, layerColor) {
+  const fallbackColor = DEFAULT_LAYER_COLORS[geometryType] || '#0f4c81'
+  const color = layerColor || fallbackColor
+
+  if (geometryType === 'point') {
+    return {
+      radius: 7,
+      fillColor: color,
+      fillOpacity: 0.9,
+      strokeColor: color,
+      strokeWidth: 2,
+      strokeOpacity: 1,
+    }
+  }
+
+  if (geometryType === 'line') {
+    return {
+      color,
+      width: 3,
+      opacity: 1,
+    }
+  }
+
+  if (geometryType === 'polygon') {
+    return {
+      strokeColor: color,
+      strokeWidth: 2,
+      strokeOpacity: 1,
+      fillColor: color,
+      fillOpacity: 0.18,
+    }
+  }
+
+  return {}
+}
+
+function normalizeLayerStyle(layer) {
+  const defaults = getDefaultLayerStyle(layer.geometryType, layer.color)
+  const currentStyle =
+    layer.style && typeof layer.style === 'object' ? layer.style : {}
+
+  return {
+    ...layer,
+    style: {
+      ...defaults,
+      ...currentStyle,
+    },
+  }
+}
+
 function ensureInitialPointLayer(layers) {
   const hasDefaultPointLayer = layers.some((layer) => layer.id === 'punts')
   if (hasDefaultPointLayer) {
-    return layers
+    return layers.map(normalizeLayerStyle)
   }
 
   const firstPointLayer = layers.find((layer) => layer.geometryType === 'point')
@@ -27,23 +82,25 @@ function ensureInitialPointLayer(layers) {
       ? firstPointLayer.features
       : []
 
-    return layers.map((layer) =>
-      layer.id === firstPointLayer.id
-        ? {
-            ...layer,
-            id: 'punts',
-            name: 'Punts',
-            color: layer.color || '#d4335b',
-            geometryType: 'point',
-            visible: true,
-            legendLabel: 'Punts',
-            features:
-              existingFeatures.length > 0
-                ? existingFeatures
-                : INITIAL_POINT_FEATURES,
-          }
-        : layer,
-    )
+    return layers
+      .map((layer) =>
+        layer.id === firstPointLayer.id
+          ? {
+              ...layer,
+              id: 'punts',
+              name: 'Punts',
+              color: layer.color || '#d4335b',
+              geometryType: 'point',
+              visible: true,
+              legendLabel: 'Punts',
+              features:
+                existingFeatures.length > 0
+                  ? existingFeatures
+                  : INITIAL_POINT_FEATURES,
+            }
+          : layer,
+      )
+      .map(normalizeLayerStyle)
   }
 
   return [
@@ -57,7 +114,7 @@ function ensureInitialPointLayer(layers) {
       legendLabel: 'Punts',
       features: INITIAL_POINT_FEATURES,
     },
-  ]
+  ].map(normalizeLayerStyle)
 }
 
 function getNextPointLayerName(layers) {
@@ -199,7 +256,7 @@ function App() {
           return features.map((feature) => ({
             ...feature,
             label: typeof feature.label === 'string' ? feature.label : '',
-            color: layer.color,
+            style: layer.style,
             layerId: layer.id,
           }))
         }),
@@ -217,7 +274,7 @@ function App() {
             .map((feature) => ({
               ...feature,
               label: typeof feature.label === 'string' ? feature.label : '',
-              color: layer.color,
+              style: layer.style,
               layerId: layer.id,
             }))
         }),
@@ -235,7 +292,7 @@ function App() {
             .map((feature) => ({
               ...feature,
               label: typeof feature.label === 'string' ? feature.label : '',
-              color: layer.color,
+              style: layer.style,
               layerId: layer.id,
             }))
         }),
@@ -355,7 +412,7 @@ function App() {
 
       const importedProject = parsedData.project
       const normalizedLayers = importedProject.layers.map((layer) => ({
-        ...layer,
+        ...normalizeLayerStyle(layer),
         features: Array.isArray(layer.features) ? layer.features : [],
       }))
 
@@ -411,6 +468,24 @@ function App() {
     )
   }
 
+  const handleLayerStyleChange = (layerId, partialStyle) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId) {
+          return layer
+        }
+
+        const nextStyle = {
+          ...getDefaultLayerStyle(layer.geometryType, layer.color),
+          ...(layer.style && typeof layer.style === 'object' ? layer.style : {}),
+          ...partialStyle,
+        }
+
+        return { ...layer, style: nextStyle }
+      }),
+    )
+  }
+
   const handleCreatePointLayer = () => {
     const nextLayerId = `point-${Date.now()}-${Math.round(Math.random() * 10000)}`
     setActivePointLayerId(nextLayerId)
@@ -426,6 +501,7 @@ function App() {
           geometryType: 'point',
           visible: true,
           legendLabel: nextLayerName,
+          style: getDefaultLayerStyle('point', '#d4335b'),
           features: [],
         },
       ]
@@ -447,6 +523,7 @@ function App() {
           geometryType: 'line',
           visible: true,
           legendLabel: nextLayerName,
+          style: getDefaultLayerStyle('line', '#ea8b1f'),
           features: [],
         },
       ]
@@ -468,6 +545,7 @@ function App() {
           geometryType: 'polygon',
           visible: true,
           legendLabel: nextLayerName,
+          style: getDefaultLayerStyle('polygon', '#2f7de1'),
           features: [],
         },
       ]
@@ -862,6 +940,7 @@ function App() {
           onCreatePolygonLayer={handleCreatePolygonLayer}
           onRenameLayer={handleRenameLayer}
           onDeleteLayer={handleDeleteLayer}
+          onLayerStyleChange={handleLayerStyleChange}
         />
         <section className="map-workspace">
           <MapToolbarSimple
