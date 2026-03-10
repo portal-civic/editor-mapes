@@ -55,7 +55,7 @@ function MapCanvas({
     })
 
   const handlePointClick = (point, event) => {
-    if (!isDeleteMode) {
+    if (!isSelectMode && !isDeleteMode) {
       return
     }
 
@@ -65,6 +65,22 @@ function MapCanvas({
     }
 
     event.originalEvent?.stopPropagation()
+
+    if (isSelectMode) {
+      const currentLabel = typeof point.label === 'string' ? point.label : ''
+      const nextLabelInput = window.prompt('Text del punt:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onPointUpdateLabel?.({
+        layerId: point.layerId,
+        pointId: point.id,
+        label: nextLabel,
+      })
+      return
+    }
 
     const shouldDelete = window.confirm('Eliminar punt?')
     if (!shouldDelete) {
@@ -92,28 +108,6 @@ function MapCanvas({
     })
   }
 
-  const handlePointContextMenu = (point, event) => {
-    if (!isSelectMode) {
-      return
-    }
-
-    event.originalEvent?.stopPropagation()
-    event.originalEvent?.preventDefault()
-
-    const currentLabel = typeof point.label === 'string' ? point.label : ''
-    const nextLabelInput = window.prompt('Text del punt:', currentLabel)
-    if (nextLabelInput === null) {
-      return
-    }
-
-    const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
-    onPointUpdateLabel?.({
-      layerId: point.layerId,
-      pointId: point.id,
-      label: nextLabel,
-    })
-  }
-
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
       <MapContainer
@@ -136,7 +130,6 @@ function MapCanvas({
             eventHandlers={{
               click: (event) => handlePointClick(point, event),
               dragend: (event) => handlePointDragEnd(point, event),
-              contextmenu: (event) => handlePointContextMenu(point, event),
             }}
           >
             {typeof point.label === 'string' && point.label.trim() ? (
