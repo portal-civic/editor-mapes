@@ -144,6 +144,10 @@ function getPolygonLayerForNewFeature(layers, activePolygonLayerId) {
   return visiblePolygonLayers[visiblePolygonLayers.length - 1] || null
 }
 
+function isValidBasemapId(basemapId) {
+  return basemapOptions.some((basemap) => basemap.id === basemapId)
+}
+
 function App() {
   const importInputRef = useRef(null)
   const [layers, setLayers] = useState(() => {
@@ -376,11 +380,10 @@ function App() {
         })
       }
 
-      if (
-        typeof importedProject.selectedBasemapId === 'string' &&
-        basemapOptions.some((basemap) => basemap.id === importedProject.selectedBasemapId)
-      ) {
+      if (isValidBasemapId(importedProject.selectedBasemapId)) {
         setSelectedBasemapId(importedProject.selectedBasemapId)
+      } else {
+        setSelectedBasemapId(defaultBasemapId)
       }
 
       if (
