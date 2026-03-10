@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
@@ -145,6 +145,7 @@ function getPolygonLayerForNewFeature(layers, activePolygonLayerId) {
 }
 
 function App() {
+  const importInputRef = useRef(null)
   const [layers, setLayers] = useState(() => {
     const seededLayers = mockLayers.map((layer) => ({
       ...layer,
@@ -284,6 +285,82 @@ function App() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(downloadUrl)
+  }
+
+  const handleOpenProjectClick = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportProjectFileChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) {
+      return
+    }
+
+    try {
+      const fileContent = await selectedFile.text()
+      const parsedData = JSON.parse(fileContent)
+
+      if (
+        !parsedData ||
+        typeof parsedData !== 'object' ||
+        !parsedData.project ||
+        typeof parsedData.project !== 'object' ||
+        !Array.isArray(parsedData.project.layers)
+      ) {
+        window.alert('Fitxer de projecte no vàlid')
+        return
+      }
+
+      const importedProject = parsedData.project
+      const normalizedLayers = importedProject.layers.map((layer) => ({
+        ...layer,
+        features: Array.isArray(layer.features) ? layer.features : [],
+      }))
+
+      setLayers(ensureInitialPointLayer(normalizedLayers))
+      setActivePointLayerId(importedProject.activePointLayerId ?? null)
+      setActiveLineLayerId(importedProject.activeLineLayerId ?? null)
+      setActivePolygonLayerId(importedProject.activePolygonLayerId ?? null)
+      setDraftLinePoints([])
+      setDraftPolygonPoints([])
+
+      if (
+        importedProject.mapView &&
+        Array.isArray(importedProject.mapView.center) &&
+        importedProject.mapView.center.length === 2 &&
+        typeof importedProject.mapView.center[0] === 'number' &&
+        typeof importedProject.mapView.center[1] === 'number' &&
+        typeof importedProject.mapView.zoom === 'number'
+      ) {
+        setMapView({
+          center: importedProject.mapView.center,
+          zoom: importedProject.mapView.zoom,
+        })
+      }
+
+      if (
+        typeof importedProject.selectedBasemapId === 'string' &&
+        basemapOptions.some((basemap) => basemap.id === importedProject.selectedBasemapId)
+      ) {
+        setSelectedBasemapId(importedProject.selectedBasemapId)
+      }
+
+      if (
+        typeof importedProject.activeWorkModeId === 'string' &&
+        ['select', 'point', 'line', 'polygon', 'delete'].includes(
+          importedProject.activeWorkModeId,
+        )
+      ) {
+        setActiveWorkModeId(importedProject.activeWorkModeId)
+      } else {
+        setActiveWorkModeId('select')
+      }
+    } catch {
+      window.alert('No s’ha pogut llegir el fitxer de projecte')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   const handleLayerVisibilityChange = (layerId, isVisible) => {
@@ -714,10 +791,18 @@ function App() {
 
   return (
     <div className="editor-shell">
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: 'none' }}
+        onChange={handleImportProjectFileChange}
+      />
       <TopBar
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
+        onOpenProject={handleOpenProjectClick}
         onExportProject={handleExportProject}
       />
 

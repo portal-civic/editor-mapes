@@ -113,6 +113,27 @@ function MapViewHandler({ onViewChange }) {
   return null
 }
 
+function MapViewSync({ center, zoom }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const currentCenter = map.getCenter()
+    const currentZoom = map.getZoom()
+    const hasSameCenter =
+      Math.abs(currentCenter.lat - center[0]) < 1e-9 &&
+      Math.abs(currentCenter.lng - center[1]) < 1e-9
+    const hasSameZoom = currentZoom === zoom
+
+    if (hasSameCenter && hasSameZoom) {
+      return
+    }
+
+    map.setView(center, zoom, { animate: false })
+  }, [center, map, zoom])
+
+  return null
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
@@ -284,6 +305,7 @@ function MapCanvas({
         className="map-canvas"
       >
         <MapCursorHandler isDrawMode={isDrawMode} />
+        <MapViewSync center={mapCenter} zoom={mapZoom} />
         <MapViewHandler onViewChange={onViewChange} />
         <MapHoverHandler isDrawMode={isDrawMode} onHoverChange={setHoverLatLng} />
         <MapClickHandler
