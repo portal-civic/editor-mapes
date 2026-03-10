@@ -8,9 +8,9 @@ import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
 
 const INITIAL_POINT_FEATURES = [
-  { id: 'pt-madrid', name: 'Madrid', coordinates: [40.4168, -3.7038] },
-  { id: 'pt-valencia', name: 'València', coordinates: [39.4699, -0.3763] },
-  { id: 'pt-zaragoza', name: 'Saragossa', coordinates: [41.6488, -0.8891] },
+  { id: 'pt-madrid', name: 'Madrid', label: '', coordinates: [40.4168, -3.7038] },
+  { id: 'pt-valencia', name: 'València', label: '', coordinates: [39.4699, -0.3763] },
+  { id: 'pt-zaragoza', name: 'Saragossa', label: '', coordinates: [41.6488, -0.8891] },
 ]
 
 function ensureInitialPointLayer(layers) {
@@ -114,6 +114,7 @@ function App() {
           const features = Array.isArray(layer.features) ? layer.features : []
           return features.map((feature) => ({
             ...feature,
+            label: typeof feature.label === 'string' ? feature.label : '',
             color: layer.color,
             layerId: layer.id,
           }))
@@ -151,6 +152,10 @@ function App() {
   }
 
   const handleMapPointAdd = (coordinates) => {
+    const nextLabelInput = window.prompt('Text del punt:', '')
+    const nextLabel =
+      nextLabelInput === null || nextLabelInput.trim() === '' ? '' : nextLabelInput
+
     setLayers((currentLayers) => {
       const targetLayer = getPointLayerForNewPoint(currentLayers, activePointLayerId)
 
@@ -173,6 +178,7 @@ function App() {
             {
               id: `pt-${Date.now()}-${Math.round(Math.random() * 10000)}`,
               name: `Punt ${pointIndex}`,
+              label: nextLabel,
               coordinates,
             },
           ],
