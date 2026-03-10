@@ -221,6 +221,24 @@ function App() {
     )
   }
 
+  const handleMapPointUpdateLabel = ({ layerId, pointId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'point') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === pointId ? { ...feature, label } : feature,
+          ),
+        }
+      }),
+    )
+  }
+
   const handleRenamePointLayer = (layerId) => {
     const layerToRename = layers.find(
       (layer) => layer.id === layerId && layer.geometryType === 'point',
@@ -316,6 +334,7 @@ function App() {
             onPointAdd={handleMapPointAdd}
             onPointDelete={handleMapPointDelete}
             onPointMove={handleMapPointMove}
+            onPointUpdateLabel={handleMapPointUpdateLabel}
           />
         </section>
         <LegendPanel layers={layers} />

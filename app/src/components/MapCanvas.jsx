@@ -1,6 +1,13 @@
 import { useRef } from 'react'
 import L from 'leaflet'
-import { MapContainer, Marker, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
+import {
+  MapContainer,
+  Marker,
+  TileLayer,
+  Tooltip,
+  ZoomControl,
+  useMapEvents,
+} from 'react-leaflet'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -29,12 +36,14 @@ function MapCanvas({
   onPointAdd,
   onPointDelete,
   onPointMove,
+  onPointUpdateLabel,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
   const isPointMode = activeWorkModeId === 'point'
   const isSelectMode = activeWorkModeId === 'select'
+  const isDeleteMode = activeWorkModeId === 'delete'
   const recentlyDraggedPointKeysRef = useRef(new Set())
 
   const createPointIcon = (color) =>
@@ -46,7 +55,7 @@ function MapCanvas({
     })
 
   const handlePointClick = (point, event) => {
-    if (!isSelectMode) {
+    if (!isDeleteMode) {
       return
     }
 
@@ -83,6 +92,28 @@ function MapCanvas({
     })
   }
 
+  const handlePointContextMenu = (point, event) => {
+    if (!isSelectMode) {
+      return
+    }
+
+    event.originalEvent?.stopPropagation()
+    event.originalEvent?.preventDefault()
+
+    const currentLabel = typeof point.label === 'string' ? point.label : ''
+    const nextLabelInput = window.prompt('Text del punt:', currentLabel)
+    if (nextLabelInput === null) {
+      return
+    }
+
+    const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+    onPointUpdateLabel?.({
+      layerId: point.layerId,
+      pointId: point.id,
+      label: nextLabel,
+    })
+  }
+
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
       <MapContainer
@@ -105,8 +136,13 @@ function MapCanvas({
             eventHandlers={{
               click: (event) => handlePointClick(point, event),
               dragend: (event) => handlePointDragEnd(point, event),
+              contextmenu: (event) => handlePointContextMenu(point, event),
             }}
-          />
+          >
+            {typeof point.label === 'string' && point.label.trim() ? (
+              <Tooltip>{point.label}</Tooltip>
+            ) : null}
+          </Marker>
         ))}
       </MapContainer>
     </section>

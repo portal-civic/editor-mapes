@@ -369,9 +369,21 @@ button.primary {
 .map-toolbar-simple {
   align-self: flex-start;
   display: inline-flex;
+  align-items: center;
   gap: 6px;
   padding: 6px;
   border: 1px solid #d6dde6;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.95);
+}
+
+.toolbar-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-zone + .toolbar-zone {
+  padding-left: 6px;
+  border-left: 1px solid #d6dde6;
 }

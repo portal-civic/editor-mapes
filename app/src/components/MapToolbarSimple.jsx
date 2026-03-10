@@ -1,22 +1,44 @@
-const TOOL_OPTIONS = [
-  { id: 'select', label: 'Seleccionar' },
-  { id: 'point', label: 'Punt' },
-]
-
 function MapToolbarSimple({ activeWorkModeId, onModeChange }) {
   return (
     <div className="map-toolbar-simple" role="toolbar" aria-label="Eines del mapa">
-      {TOOL_OPTIONS.map((tool) => (
+      <div className="toolbar-zone" aria-label="Seleccionar">
         <button
-          key={tool.id}
           type="button"
-          className={`tool-btn ${activeWorkModeId === tool.id ? 'active' : ''}`}
-          aria-pressed={activeWorkModeId === tool.id}
-          onClick={() => onModeChange(tool.id)}
+          className={`tool-btn ${activeWorkModeId === 'select' ? 'active' : ''}`}
+          aria-pressed={activeWorkModeId === 'select'}
+          onClick={() => onModeChange('select')}
         >
-          {tool.label}
+          Seleccionar
         </button>
-      ))}
+      </div>
+
+      <div className="toolbar-zone" aria-label="Crear">
+        <button
+          type="button"
+          className={`tool-btn ${activeWorkModeId === 'point' ? 'active' : ''}`}
+          aria-pressed={activeWorkModeId === 'point'}
+          onClick={() => onModeChange('point')}
+        >
+          Punt
+        </button>
+        <button type="button" className="tool-btn" disabled>
+          Línia
+        </button>
+        <button type="button" className="tool-btn" disabled>
+          Polígon
+        </button>
+      </div>
+
+      <div className="toolbar-zone" aria-label="Eliminar">
+        <button
+          type="button"
+          className={`tool-btn ${activeWorkModeId === 'delete' ? 'active' : ''}`}
+          aria-pressed={activeWorkModeId === 'delete'}
+          onClick={() => onModeChange('delete')}
+        >
+          Eliminar
+        </button>
+      </div>
     </div>
   )
 }
