@@ -19,6 +19,18 @@ const DEFAULT_ZOOM = 6
 const FALLBACK_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const FALLBACK_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 
+function getDashArray(dashStyle) {
+  if (dashStyle === 'dashed') {
+    return '10,8'
+  }
+
+  if (dashStyle === 'dotted') {
+    return '2,8'
+  }
+
+  return undefined
+}
+
 function MapClickHandler({
   canAddPoint,
   canAddLine,
@@ -390,6 +402,7 @@ function MapCanvas({
                   ? Math.max((lineFeature.style?.width || 3) + 4, 7)
                   : lineFeature.style?.width || 3,
               opacity: lineFeature.style?.opacity ?? 1,
+              dashArray: getDashArray(lineFeature.style?.dashStyle),
             }}
             interactive
             bubblingMouseEvents={false}
@@ -433,6 +446,7 @@ function MapCanvas({
                 stroke: (polygonFeature.style?.strokeWidth ?? 2) > 0,
                 weight: polygonFeature.style?.strokeWidth ?? 2,
                 opacity: polygonFeature.style?.strokeOpacity ?? 1,
+                dashArray: getDashArray(polygonFeature.style?.dashStyle),
                 fillColor: polygonFeature.style?.fillColor || '#2f7de1',
                 fill: true,
                 fillOpacity: polygonFeature.style?.fillOpacity ?? 0.18,

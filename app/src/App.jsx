@@ -40,6 +40,7 @@ function getDefaultLayerStyle(geometryType, layerColor) {
       color,
       width: 3,
       opacity: 1,
+      dashStyle: 'solid',
     }
   }
 
@@ -48,6 +49,7 @@ function getDefaultLayerStyle(geometryType, layerColor) {
       strokeColor: color,
       strokeWidth: 2,
       strokeOpacity: 1,
+      dashStyle: 'solid',
       fillColor: color,
       fillOpacity: 0.18,
     }

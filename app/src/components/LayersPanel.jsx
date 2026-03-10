@@ -243,6 +243,21 @@ function LayersPanel({
                           }
                         />
                       </label>
+                      <label>
+                        Tipus de línia
+                        <select
+                          value={layerStyle.dashStyle ?? 'solid'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              dashStyle: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="solid">Solid</option>
+                          <option value="dashed">Dashed</option>
+                          <option value="dotted">Dotted</option>
+                        </select>
+                      </label>
                     </>
                   ) : null}
 
@@ -315,6 +330,21 @@ function LayersPanel({
                             })
                           }
                         />
+                      </label>
+                      <label>
+                        Tipus de vora
+                        <select
+                          value={layerStyle.dashStyle ?? 'solid'}
+                          onChange={(event) =>
+                            onLayerStyleChange?.(layer.id, {
+                              dashStyle: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="solid">Solid</option>
+                          <option value="dashed">Dashed</option>
+                          <option value="dotted">Dotted</option>
+                        </select>
                       </label>
                     </>
                   ) : null}

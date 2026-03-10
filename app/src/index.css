@@ -301,6 +301,15 @@ button.primary {
   background: #f8fafc;
 }
 
+.layer-style-editor select {
+  border: 1px solid #c8d0db;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  color: #243244;
+  background: #f8fafc;
+}
+
 .layer-style-editor input[type='color'] {
   width: 100%;
   height: 32px;
