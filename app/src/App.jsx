@@ -223,6 +223,45 @@ function App() {
     )
   }
 
+  const handleDeletePointLayer = (layerId) => {
+    setLayers((currentLayers) => {
+      const layerToDelete = currentLayers.find(
+        (layer) => layer.id === layerId && layer.geometryType === 'point',
+      )
+
+      if (!layerToDelete) {
+        return currentLayers
+      }
+
+      const layerFeatures = Array.isArray(layerToDelete.features)
+        ? layerToDelete.features
+        : []
+
+      if (layerFeatures.length > 0) {
+        window.alert('No es pot eliminar una capa amb punts')
+        return currentLayers
+      }
+
+      const shouldDelete = window.confirm('Eliminar capa?')
+      if (!shouldDelete) {
+        return currentLayers
+      }
+
+      const nextLayers = currentLayers.filter((layer) => layer.id !== layerId)
+
+      if (activePointLayerId === layerId) {
+        const remainingPointLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'point',
+        )
+        const nextActivePointLayer =
+          remainingPointLayers[remainingPointLayers.length - 1]?.id || null
+        setActivePointLayerId(nextActivePointLayer)
+      }
+
+      return nextLayers
+    })
+  }
+
   return (
     <div className="editor-shell">
       <TopBar
@@ -239,6 +278,7 @@ function App() {
           onLayerVisibilityChange={handleLayerVisibilityChange}
           onCreatePointLayer={handleCreatePointLayer}
           onRenamePointLayer={handleRenamePointLayer}
+          onDeletePointLayer={handleDeletePointLayer}
         />
         <section className="map-workspace">
           <MapToolbarSimple

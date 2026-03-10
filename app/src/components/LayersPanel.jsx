@@ -5,6 +5,7 @@ function LayersPanel({
   onLayerVisibilityChange,
   onCreatePointLayer,
   onRenamePointLayer,
+  onDeletePointLayer,
 }) {
   return (
     <aside className="panel panel-left">
@@ -52,6 +53,12 @@ function LayersPanel({
                     onClick={() => onRenamePointLayer?.(layer.id)}
                   >
                     Renombrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeletePointLayer?.(layer.id)}
+                  >
+                    Eliminar
                   </button>
                 </>
               ) : null}
