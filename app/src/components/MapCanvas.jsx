@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   CircleMarker,
@@ -99,9 +99,25 @@ function MapHoverHandler({ isDrawMode, onHoverChange }) {
   return null
 }
 
+function MapViewHandler({ onViewChange }) {
+  const map = useMapEvents({
+    moveend() {
+      const center = map.getCenter()
+      onViewChange?.({
+        center: [center.lat, center.lng],
+        zoom: map.getZoom(),
+      })
+    },
+  })
+
+  return null
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
+  mapCenter = DEFAULT_CENTER,
+  mapZoom = DEFAULT_ZOOM,
   pointFeatures = [],
   lineFeatures = [],
   polygonFeatures = [],
@@ -112,9 +128,12 @@ function MapCanvas({
   onPointMove,
   onPointUpdateLabel,
   onLineDelete,
+  onLineUpdateLabel,
   onPolygonDelete,
+  onPolygonUpdateLabel,
   onDraftLinePointAdd,
   onDraftPolygonPointAdd,
+  onViewChange,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
@@ -191,11 +210,27 @@ function MapCanvas({
   }
 
   const handleLineClick = (lineFeature, event) => {
-    if (!isDeleteMode) {
+    if (!isSelectMode && !isDeleteMode) {
       return
     }
 
     event.originalEvent?.stopPropagation()
+
+    if (isSelectMode) {
+      const currentLabel = typeof lineFeature.label === 'string' ? lineFeature.label : ''
+      const nextLabelInput = window.prompt('Text de la línia:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onLineUpdateLabel?.({
+        layerId: lineFeature.layerId,
+        lineId: lineFeature.id,
+        label: nextLabel,
+      })
+      return
+    }
 
     const shouldDelete = window.confirm('Eliminar línia?')
     if (!shouldDelete) {
@@ -206,11 +241,28 @@ function MapCanvas({
   }
 
   const handlePolygonClick = (polygonFeature, event) => {
-    if (!isDeleteMode) {
+    if (!isSelectMode && !isDeleteMode) {
       return
     }
 
     event.originalEvent?.stopPropagation()
+
+    if (isSelectMode) {
+      const currentLabel =
+        typeof polygonFeature.label === 'string' ? polygonFeature.label : ''
+      const nextLabelInput = window.prompt('Text del polígon:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onPolygonUpdateLabel?.({
+        layerId: polygonFeature.layerId,
+        polygonId: polygonFeature.id,
+        label: nextLabel,
+      })
+      return
+    }
 
     const shouldDelete = window.confirm('Eliminar polígon?')
     if (!shouldDelete) {
@@ -226,12 +278,13 @@ function MapCanvas({
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
       <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
+        center={mapCenter}
+        zoom={mapZoom}
         zoomControl={false}
         className="map-canvas"
       >
         <MapCursorHandler isDrawMode={isDrawMode} />
+        <MapViewHandler onViewChange={onViewChange} />
         <MapHoverHandler isDrawMode={isDrawMode} onHoverChange={setHoverLatLng} />
         <MapClickHandler
           canAddPoint={isPointMode}
@@ -250,7 +303,7 @@ function MapCanvas({
             positions={lineFeature.latlngs}
             pathOptions={{
               color: lineFeature.color || '#ea8b1f',
-              weight: isDeleteMode ? 6 : 3,
+              weight: isSelectMode || isDeleteMode ? 8 : 3,
             }}
             interactive
             bubblingMouseEvents={false}
@@ -286,21 +339,36 @@ function MapCanvas({
         ) : null}
 
         {polygonFeatures.map((polygonFeature) => (
-          <Polygon
-            key={`${polygonFeature.layerId}-${polygonFeature.id}`}
-            positions={polygonFeature.latlngs}
-            pathOptions={{
-              color: polygonFeature.color || '#2f7de1',
-              weight: 2,
-              fillColor: polygonFeature.color || '#2f7de1',
-              fillOpacity: 0.18,
-            }}
-            interactive={isDeleteMode}
-            bubblingMouseEvents={false}
-            eventHandlers={{
-              click: (event) => handlePolygonClick(polygonFeature, event),
-            }}
-          />
+          <Fragment key={`${polygonFeature.layerId}-${polygonFeature.id}`}>
+            <Polygon
+              positions={polygonFeature.latlngs}
+              pathOptions={{
+                color: polygonFeature.color || '#2f7de1',
+                weight: 2,
+                fillColor: polygonFeature.color || '#2f7de1',
+                fill: true,
+                fillOpacity: 0.18,
+              }}
+              interactive={false}
+            />
+            {isSelectMode || isDeleteMode ? (
+              <Polygon
+                positions={polygonFeature.latlngs}
+                pathOptions={{
+                  color: 'transparent',
+                  weight: 10,
+                  fillColor: '#000000',
+                  fill: true,
+                  fillOpacity: 0.01,
+                }}
+                interactive
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: (event) => handlePolygonClick(polygonFeature, event),
+                }}
+              />
+            ) : null}
+          </Fragment>
         ))}
 
         {isPolygonMode && draftPolygonPoints.length > 0 ? (

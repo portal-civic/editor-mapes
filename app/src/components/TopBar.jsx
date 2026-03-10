@@ -2,6 +2,7 @@ function TopBar({
   basemapOptions = [],
   selectedBasemapId = '',
   onBasemapChange,
+  onExportProject,
 }) {
   return (
     <header className="topbar">
@@ -24,8 +25,8 @@ function TopBar({
           </select>
         </label>
         <button type="button">Guardar projecte</button>
-        <button type="button" className="primary">
-          Exportar
+        <button type="button" className="primary" onClick={onExportProject}>
+          Exportar projecte
         </button>
       </div>
     </header>

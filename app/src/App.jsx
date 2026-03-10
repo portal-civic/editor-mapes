@@ -7,6 +7,8 @@ import MapToolbarSimple from './components/MapToolbarSimple'
 import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
 
+const DEFAULT_MAP_CENTER = [40.4168, -3.7038]
+const DEFAULT_MAP_ZOOM = 6
 const INITIAL_POINT_FEATURES = [
   { id: 'pt-madrid', name: 'Madrid', label: '', coordinates: [40.4168, -3.7038] },
   { id: 'pt-valencia', name: 'València', label: '', coordinates: [39.4699, -0.3763] },
@@ -153,6 +155,10 @@ function App() {
   })
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
+  const [mapView, setMapView] = useState({
+    center: DEFAULT_MAP_CENTER,
+    zoom: DEFAULT_MAP_ZOOM,
+  })
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
   const [draftLinePoints, setDraftLinePoints] = useState([])
   const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
@@ -202,6 +208,7 @@ function App() {
             .filter((feature) => Array.isArray(feature.latlngs))
             .map((feature) => ({
               ...feature,
+              label: typeof feature.label === 'string' ? feature.label : '',
               color: layer.color,
               layerId: layer.id,
             }))
@@ -219,6 +226,7 @@ function App() {
             .filter((feature) => Array.isArray(feature.latlngs))
             .map((feature) => ({
               ...feature,
+              label: typeof feature.label === 'string' ? feature.label : '',
               color: layer.color,
               layerId: layer.id,
             }))
@@ -234,6 +242,48 @@ function App() {
     if (nextMode !== 'polygon') {
       setDraftPolygonPoints([])
     }
+  }
+
+  const handleMapViewChange = ({ center, zoom }) => {
+    setMapView((currentView) => {
+      if (
+        currentView.zoom === zoom &&
+        currentView.center[0] === center[0] &&
+        currentView.center[1] === center[1]
+      ) {
+        return currentView
+      }
+
+      return { center, zoom }
+    })
+  }
+
+  const buildProjectData = () => ({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    project: {
+      mapView,
+      selectedBasemapId,
+      activeWorkModeId,
+      activePointLayerId,
+      activeLineLayerId,
+      activePolygonLayerId,
+      layers,
+    },
+  })
+
+  const handleExportProject = () => {
+    const projectData = buildProjectData()
+    const jsonContent = JSON.stringify(projectData, null, 2)
+    const blob = new Blob([jsonContent], { type: 'application/json' })
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = 'editor-mapes-project.json'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
   }
 
   const handleLayerVisibilityChange = (layerId, isVisible) => {
@@ -411,6 +461,24 @@ function App() {
     )
   }
 
+  const handleMapLineUpdateLabel = ({ layerId, lineId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'line') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === lineId ? { ...feature, label } : feature,
+          ),
+        }
+      }),
+    )
+  }
+
   const handleMapPolygonDelete = ({ layerId, polygonId }) => {
     setLayers((currentLayers) =>
       currentLayers.map((layer) => {
@@ -422,6 +490,24 @@ function App() {
         return {
           ...layer,
           features: currentFeatures.filter((feature) => feature.id !== polygonId),
+        }
+      }),
+    )
+  }
+
+  const handleMapPolygonUpdateLabel = ({ layerId, polygonId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'polygon') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === polygonId ? { ...feature, label } : feature,
+          ),
         }
       }),
     )
@@ -632,6 +718,7 @@ function App() {
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
+        onExportProject={handleExportProject}
       />
 
       <main className="workspace">
@@ -686,6 +773,8 @@ function App() {
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}
+            mapCenter={mapView.center}
+            mapZoom={mapView.zoom}
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
             polygonFeatures={visiblePolygonFeatures}
@@ -696,9 +785,12 @@ function App() {
             onPointMove={handleMapPointMove}
             onPointUpdateLabel={handleMapPointUpdateLabel}
             onLineDelete={handleMapLineDelete}
+            onLineUpdateLabel={handleMapLineUpdateLabel}
             onPolygonDelete={handleMapPolygonDelete}
+            onPolygonUpdateLabel={handleMapPolygonUpdateLabel}
             onDraftLinePointAdd={handleDraftLinePointAdd}
             onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
+            onViewChange={handleMapViewChange}
           />
         </section>
         <LegendPanel layers={layers} />
