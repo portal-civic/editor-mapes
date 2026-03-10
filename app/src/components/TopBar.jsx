@@ -28,6 +28,7 @@ function TopBar({
       format: 'jsonv2',
       countrycodes: 'es',
       addressdetails: '1',
+      polygon_geojson: '1',
       limit: '6',
       dedupe: '1',
       q: query,
@@ -71,6 +72,7 @@ function TopBar({
             lat: Number(item.lat),
             lon: Number(item.lon),
             boundingbox: Array.isArray(item.boundingbox) ? item.boundingbox : null,
+            geometry: item.geojson || null,
           })),
         )
       } catch (error) {
@@ -111,12 +113,21 @@ function TopBar({
       label: suggestion.label,
       center: [suggestion.lat, suggestion.lon],
       bounds,
+      geometry: suggestion.geometry,
       zoom: 12,
     })
 
     setSearchQuery(suggestion.label)
     setSuggestions([])
     setIsSearchOpen(false)
+  }
+
+  const handleClearMunicipality = () => {
+    setSearchQuery('')
+    setSuggestions([])
+    setIsSearchLoading(false)
+    setIsSearchOpen(false)
+    onMunicipalitySelect?.(null)
   }
 
   return (
@@ -138,6 +149,9 @@ function TopBar({
               const nextQuery = event.target.value
               setSearchQuery(nextQuery)
               setIsSearchOpen(nextQuery.trim().length >= SEARCH_MIN_CHARS)
+              if (!nextQuery.trim()) {
+                onMunicipalitySelect?.(null)
+              }
             }}
             onFocus={() => {
               if (canSearch) {
@@ -153,6 +167,19 @@ function TopBar({
             placeholder="Buscar municipi..."
             autoComplete="off"
           />
+          {searchQuery.trim() ? (
+            <button
+              type="button"
+              className="topbar-search-clear"
+              aria-label="Buidar cerca de municipi"
+              onMouseDown={(event) => {
+                event.preventDefault()
+                handleClearMunicipality()
+              }}
+            >
+              ×
+            </button>
+          ) : null}
           {isSearchOpen && canSearch && (isSearchLoading || suggestions.length > 0) ? (
             <ul className="topbar-search-results">
               {isSearchLoading ? <li>Cercant...</li> : null}

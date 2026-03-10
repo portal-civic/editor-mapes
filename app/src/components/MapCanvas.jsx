@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   CircleMarker,
+  GeoJSON,
   MapContainer,
   Marker,
   Polygon,
@@ -166,6 +167,7 @@ function MapCanvas({
   pointFeatures = [],
   lineFeatures = [],
   polygonFeatures = [],
+  selectedMunicipalityGeometry = null,
   draftLinePoints = [],
   draftPolygonPoints = [],
   onPointAdd,
@@ -346,6 +348,19 @@ function MapCanvas({
         />
         <ZoomControl position="topright" />
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
+
+        {selectedMunicipalityGeometry ? (
+          <GeoJSON
+            data={selectedMunicipalityGeometry}
+            style={{
+              color: '#3b82f6',
+              weight: 2,
+              fillColor: '#3b82f6',
+              fillOpacity: 0.1,
+            }}
+            interactive={false}
+          />
+        ) : null}
 
         {lineFeatures.map((lineFeature) => (
           <Polyline

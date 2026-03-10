@@ -66,11 +66,30 @@ body {
   width: 100%;
   border: 1px solid #c8d0db;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 8px 34px 8px 10px;
   font-size: 0.875rem;
   font-weight: 600;
   color: #243244;
   background: #f8fafc;
+}
+
+.topbar-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 30px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  line-height: 1;
+  font-size: 1rem;
+  color: #475569;
+  background: transparent;
+}
+
+.topbar-search-clear:hover {
+  background: #e2e8f0;
 }
 
 .topbar-search-results {

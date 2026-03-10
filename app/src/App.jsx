@@ -161,6 +161,8 @@ function App() {
     zoom: DEFAULT_MAP_ZOOM,
   })
   const [mapNavigationRequest, setMapNavigationRequest] = useState(null)
+  const [selectedMunicipalityGeometry, setSelectedMunicipalityGeometry] =
+    useState(null)
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
   const [draftLinePoints, setDraftLinePoints] = useState([])
   const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
@@ -260,8 +262,20 @@ function App() {
     })
   }
 
-  const handleMunicipalitySelect = ({ center, bounds, zoom = 12 }) => {
+  const handleMunicipalitySelect = (selection) => {
+    if (!selection) {
+      setSelectedMunicipalityGeometry(null)
+      return
+    }
+
+    const { center, bounds, geometry, zoom = 12 } = selection
     const requestId = `${Date.now()}-${Math.random()}`
+
+    if (geometry && ['Polygon', 'MultiPolygon'].includes(geometry.type)) {
+      setSelectedMunicipalityGeometry(geometry)
+    } else {
+      setSelectedMunicipalityGeometry(null)
+    }
 
     if (Array.isArray(bounds) && bounds.length === 2) {
       setMapNavigationRequest({
@@ -888,6 +902,7 @@ function App() {
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
             polygonFeatures={visiblePolygonFeatures}
+            selectedMunicipalityGeometry={selectedMunicipalityGeometry}
             draftLinePoints={draftLinePoints}
             draftPolygonPoints={draftPolygonPoints}
             onPointAdd={handleMapPointAdd}
