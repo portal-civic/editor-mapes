@@ -419,25 +419,35 @@ function MapCanvas({
         ) : null}
 
         {lineFeatures.map((lineFeature) => (
-          <Polyline
-            key={`${lineFeature.layerId}-${lineFeature.id}`}
-            positions={lineFeature.latlngs}
-            pane={layerPanesById[lineFeature.layerId]}
-            pathOptions={{
-              color: lineFeature.style?.color || '#ea8b1f',
-              weight:
-                isSelectMode || isDeleteMode
-                  ? Math.max((lineFeature.style?.width || 3) + 4, 7)
-                  : lineFeature.style?.width || 3,
-              opacity: lineFeature.style?.opacity ?? 1,
-              dashArray: getDashArray(lineFeature.style?.dashStyle),
-            }}
-            interactive
-            bubblingMouseEvents={false}
-            eventHandlers={{
-              click: (event) => handleLineClick(lineFeature, event),
-            }}
-          />
+          <Fragment key={`${lineFeature.layerId}-${lineFeature.id}`}>
+            <Polyline
+              positions={lineFeature.latlngs}
+              pane={layerPanesById[lineFeature.layerId]}
+              pathOptions={{
+                color: lineFeature.style?.color || '#ea8b1f',
+                weight: lineFeature.style?.width || 3,
+                opacity: lineFeature.style?.opacity ?? 1,
+                dashArray: getDashArray(lineFeature.style?.dashStyle),
+              }}
+              interactive={false}
+            />
+            {isSelectMode || isDeleteMode ? (
+              <Polyline
+                positions={lineFeature.latlngs}
+                pane={layerPanesById[lineFeature.layerId]}
+                pathOptions={{
+                  color: 'transparent',
+                  weight: Math.max((lineFeature.style?.width || 3) + 4, 7),
+                  opacity: 0,
+                }}
+                interactive
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: (event) => handleLineClick(lineFeature, event),
+                }}
+              />
+            ) : null}
+          </Fragment>
         ))}
 
         {isLineMode && draftLinePoints.length > 0 ? (
