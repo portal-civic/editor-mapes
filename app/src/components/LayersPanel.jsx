@@ -17,6 +17,7 @@ function LayersPanel({
   onLayerStyleChange,
   onMoveLayerUp,
   onMoveLayerDown,
+  onExportLayerGeoJSON,
 }) {
   const [openStyleLayerId, setOpenStyleLayerId] = useState(null)
 
@@ -100,6 +101,12 @@ function LayersPanel({
                   </button>
                   <button type="button" onClick={() => onDeleteLayer?.(layer.id)}>
                     Eliminar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onExportLayerGeoJSON?.(layer.id)}
+                  >
+                    Exportar GeoJSON
                   </button>
                   <button
                     type="button"

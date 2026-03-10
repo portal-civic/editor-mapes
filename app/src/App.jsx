@@ -417,6 +417,147 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
   }
 }
 
+function toGeoJSONCoordinate(latlng) {
+  if (!Array.isArray(latlng) || latlng.length < 2) {
+    return null
+  }
+
+  const lat = Number(latlng[0])
+  const lng = Number(latlng[1])
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null
+  }
+
+  return [lng, lat]
+}
+
+function closeGeoJSONRing(ring) {
+  if (!Array.isArray(ring) || ring.length < 3) {
+    return null
+  }
+
+  const first = ring[0]
+  const last = ring[ring.length - 1]
+  if (first[0] === last[0] && first[1] === last[1]) {
+    return ring
+  }
+
+  return [...ring, first]
+}
+
+function getPolygonGeoJSONCoordinates(latlngs) {
+  if (!Array.isArray(latlngs) || latlngs.length === 0) {
+    return null
+  }
+
+  const isSingleRing =
+    Array.isArray(latlngs[0]) &&
+    latlngs[0].length >= 2 &&
+    typeof latlngs[0][0] === 'number' &&
+    typeof latlngs[0][1] === 'number'
+
+  if (isSingleRing) {
+    const ring = latlngs.map(toGeoJSONCoordinate).filter(Boolean)
+    const closedRing = closeGeoJSONRing(ring)
+    return closedRing ? [closedRing] : null
+  }
+
+  const rings = latlngs
+    .map((ringLatlngs) =>
+      Array.isArray(ringLatlngs)
+        ? closeGeoJSONRing(ringLatlngs.map(toGeoJSONCoordinate).filter(Boolean))
+        : null,
+    )
+    .filter(Boolean)
+
+  return rings.length > 0 ? rings : null
+}
+
+function convertFeatureToGeoJSON(feature, layer) {
+  const baseProperties = {
+    label: typeof feature?.label === 'string' ? feature.label : '',
+    layerName: layer.name,
+    layerType: layer.geometryType,
+  }
+
+  if (layer.geometryType === 'point') {
+    const coordinates = toGeoJSONCoordinate(feature?.coordinates)
+    if (!coordinates) {
+      return null
+    }
+
+    return {
+      type: 'Feature',
+      id: feature?.id,
+      properties: baseProperties,
+      geometry: {
+        type: 'Point',
+        coordinates,
+      },
+    }
+  }
+
+  if (layer.geometryType === 'line') {
+    const coordinates = Array.isArray(feature?.latlngs)
+      ? feature.latlngs.map(toGeoJSONCoordinate).filter(Boolean)
+      : []
+
+    if (coordinates.length < 2) {
+      return null
+    }
+
+    return {
+      type: 'Feature',
+      id: feature?.id,
+      properties: baseProperties,
+      geometry: {
+        type: 'LineString',
+        coordinates,
+      },
+    }
+  }
+
+  if (layer.geometryType === 'polygon') {
+    const coordinates = getPolygonGeoJSONCoordinates(feature?.latlngs)
+    if (!coordinates) {
+      return null
+    }
+
+    return {
+      type: 'Feature',
+      id: feature?.id,
+      properties: baseProperties,
+      geometry: {
+        type: 'Polygon',
+        coordinates,
+      },
+    }
+  }
+
+  return null
+}
+
+function convertLayerToGeoJSON(layer) {
+  const layerFeatures = Array.isArray(layer?.features) ? layer.features : []
+
+  return {
+    type: 'FeatureCollection',
+    features: layerFeatures
+      .map((feature) => convertFeatureToGeoJSON(feature, layer))
+      .filter(Boolean),
+  }
+}
+
+function sanitizeGeoJSONFileName(name) {
+  const safeName = String(name || 'layer')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '')
+
+  return safeName || 'layer'
+}
+
 function App() {
   const importInputRef = useRef(null)
   const importGeoJSONInputRef = useRef(null)
@@ -605,6 +746,33 @@ function App() {
     const link = document.createElement('a')
     link.href = downloadUrl
     link.download = 'editor-mapes-project.json'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+  }
+
+  const handleExportLayerGeoJSON = (layerId) => {
+    const layer = layers.find((currentLayer) => currentLayer.id === layerId)
+    if (!layer) {
+      return
+    }
+
+    if (
+      layer.geometryType !== 'point' &&
+      layer.geometryType !== 'line' &&
+      layer.geometryType !== 'polygon'
+    ) {
+      return
+    }
+
+    const geojsonData = convertLayerToGeoJSON(layer)
+    const geojsonContent = JSON.stringify(geojsonData, null, 2)
+    const blob = new Blob([geojsonContent], { type: 'application/geo+json' })
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = `${sanitizeGeoJSONFileName(layer.name)}.geojson`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -1259,6 +1427,7 @@ function App() {
           onLayerStyleChange={handleLayerStyleChange}
           onMoveLayerUp={handleMoveLayerUp}
           onMoveLayerDown={handleMoveLayerDown}
+          onExportLayerGeoJSON={handleExportLayerGeoJSON}
         />
         <section className="map-workspace">
           <MapToolbarSimple
