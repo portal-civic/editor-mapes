@@ -3,6 +3,7 @@ import L from 'leaflet'
 import {
   MapContainer,
   Marker,
+  Polyline,
   TileLayer,
   Tooltip,
   ZoomControl,
@@ -14,15 +15,19 @@ const DEFAULT_ZOOM = 6
 const FALLBACK_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const FALLBACK_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 
-function ClickToAddPoint({ canAddPoint, onMapClick }) {
+function MapClickHandler({ canAddPoint, canAddLine, onPointAdd, onLinePointAdd }) {
   useMapEvents({
     click(event) {
-      if (!canAddPoint) {
+      if (canAddPoint) {
+        const { lat, lng } = event.latlng
+        onPointAdd?.([lat, lng])
         return
       }
 
-      const { lat, lng } = event.latlng
-      onMapClick?.([lat, lng])
+      if (canAddLine) {
+        const { lat, lng } = event.latlng
+        onLinePointAdd?.([lat, lng])
+      }
     },
   })
 
@@ -33,15 +38,19 @@ function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
   pointFeatures = [],
+  lineFeatures = [],
+  draftLinePoints = [],
   onPointAdd,
   onPointDelete,
   onPointMove,
   onPointUpdateLabel,
+  onDraftLinePointAdd,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
   const isPointMode = activeWorkModeId === 'point'
+  const isLineMode = activeWorkModeId === 'line'
   const isSelectMode = activeWorkModeId === 'select'
   const isDeleteMode = activeWorkModeId === 'delete'
   const recentlyDraggedPointKeysRef = useRef(new Set())
@@ -115,11 +124,40 @@ function MapCanvas({
         zoom={DEFAULT_ZOOM}
         zoomControl={false}
         className="map-canvas"
-        style={{ cursor: isPointMode ? 'crosshair' : '' }}
+        style={{ cursor: isPointMode || isLineMode ? 'crosshair' : '' }}
       >
-        <ClickToAddPoint canAddPoint={isPointMode} onMapClick={onPointAdd} />
+        <MapClickHandler
+          canAddPoint={isPointMode}
+          canAddLine={isLineMode}
+          onPointAdd={onPointAdd}
+          onLinePointAdd={onDraftLinePointAdd}
+        />
         <ZoomControl position="topright" />
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
+
+        {lineFeatures.map((lineFeature) => (
+          <Polyline
+            key={`${lineFeature.layerId}-${lineFeature.id}`}
+            positions={lineFeature.latlngs}
+            pathOptions={{
+              color: lineFeature.color || '#ea8b1f',
+              weight: 3,
+            }}
+            interactive={false}
+          />
+        ))}
+
+        {isLineMode && draftLinePoints.length > 0 ? (
+          <Polyline
+            positions={draftLinePoints}
+            pathOptions={{
+              color: '#ea8b1f',
+              weight: 3,
+              dashArray: '6,6',
+            }}
+            interactive={false}
+          />
+        ) : null}
 
         {pointFeatures.map((point) => (
           <Marker

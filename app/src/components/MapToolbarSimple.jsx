@@ -21,7 +21,12 @@ function MapToolbarSimple({ activeWorkModeId, onModeChange }) {
         >
           Punt
         </button>
-        <button type="button" className="tool-btn" disabled>
+        <button
+          type="button"
+          className={`tool-btn ${activeWorkModeId === 'line' ? 'active' : ''}`}
+          aria-pressed={activeWorkModeId === 'line'}
+          onClick={() => onModeChange('line')}
+        >
           Línia
         </button>
         <button type="button" className="tool-btn" disabled>

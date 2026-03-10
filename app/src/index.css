@@ -130,6 +130,9 @@ button.primary {
   gap: 10px;
   color: #3e4c5f;
   font-size: 0.9rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .panel-content p {

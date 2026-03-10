@@ -98,6 +98,22 @@ function getPointLayerForNewPoint(layers, activePointLayerId) {
   return visiblePointLayers[visiblePointLayers.length - 1] || null
 }
 
+function getLineLayerForNewFeature(layers, activeLineLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activeLineLayerId && layer.geometryType === 'line',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visibleLineLayers = layers.filter(
+    (layer) => layer.geometryType === 'line' && layer.visible,
+  )
+
+  return visibleLineLayers[visibleLineLayers.length - 1] || null
+}
+
 function App() {
   const [layers, setLayers] = useState(() => {
     const seededLayers = mockLayers.map((layer) => ({
@@ -110,6 +126,7 @@ function App() {
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
+  const [draftLinePoints, setDraftLinePoints] = useState([])
   const [activeLineLayerId, setActiveLineLayerId] = useState(() => {
     const initialLineLayer = ensureInitialPointLayer(mockLayers).find(
       (layer) => layer.geometryType === 'line',
@@ -139,6 +156,30 @@ function App() {
         }),
     [layers],
   )
+
+  const visibleLineFeatures = useMemo(
+    () =>
+      layers
+        .filter((layer) => layer.geometryType === 'line' && layer.visible)
+        .flatMap((layer) => {
+          const features = Array.isArray(layer.features) ? layer.features : []
+          return features
+            .filter((feature) => Array.isArray(feature.latlngs))
+            .map((feature) => ({
+              ...feature,
+              color: layer.color,
+              layerId: layer.id,
+            }))
+        }),
+    [layers],
+  )
+
+  const handleWorkModeChange = (nextMode) => {
+    setActiveWorkModeId(nextMode)
+    if (nextMode !== 'line') {
+      setDraftLinePoints([])
+    }
+  }
 
   const handleLayerVisibilityChange = (layerId, isVisible) => {
     setLayers((currentLayers) =>
@@ -278,6 +319,55 @@ function App() {
     )
   }
 
+  const handleDraftLinePointAdd = (coordinates) => {
+    const targetLineLayer = getLineLayerForNewFeature(layers, activeLineLayerId)
+
+    if (!targetLineLayer) {
+      window.alert('Cal una capa de línia activa')
+      return
+    }
+
+    setDraftLinePoints((currentPoints) => [...currentPoints, coordinates])
+  }
+
+  const handleDraftLineCancel = () => {
+    setDraftLinePoints([])
+  }
+
+  const handleDraftLineFinish = () => {
+    if (draftLinePoints.length < 2) {
+      return
+    }
+
+    const targetLineLayer = getLineLayerForNewFeature(layers, activeLineLayerId)
+    if (!targetLineLayer) {
+      window.alert('Cal una capa de línia activa')
+      return
+    }
+
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== targetLineLayer.id || layer.geometryType !== 'line') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: [
+            ...currentFeatures,
+            {
+              id: `ln-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              latlngs: [...draftLinePoints],
+            },
+          ],
+        }
+      }),
+    )
+
+    setDraftLinePoints([])
+  }
+
   const handleRenameLayer = (layerId) => {
     const layerToRename = layers.find(
       (layer) =>
@@ -384,16 +474,33 @@ function App() {
         <section className="map-workspace">
           <MapToolbarSimple
             activeWorkModeId={activeWorkModeId}
-            onModeChange={setActiveWorkModeId}
+            onModeChange={handleWorkModeChange}
           />
+          {activeWorkModeId === 'line' && draftLinePoints.length > 0 ? (
+            <div>
+              <button
+                type="button"
+                onClick={handleDraftLineFinish}
+                disabled={draftLinePoints.length < 2}
+              >
+                Acabar línia
+              </button>{' '}
+              <button type="button" onClick={handleDraftLineCancel}>
+                Cancel·lar
+              </button>
+            </div>
+          ) : null}
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}
             pointFeatures={visiblePointFeatures}
+            lineFeatures={visibleLineFeatures}
+            draftLinePoints={draftLinePoints}
             onPointAdd={handleMapPointAdd}
             onPointDelete={handleMapPointDelete}
             onPointMove={handleMapPointMove}
             onPointUpdateLabel={handleMapPointUpdateLabel}
+            onDraftLinePointAdd={handleDraftLinePointAdd}
           />
         </section>
         <LegendPanel layers={layers} />
