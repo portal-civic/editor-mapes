@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import {
   MapContainer,
@@ -8,6 +8,7 @@ import {
   TileLayer,
   Tooltip,
   ZoomControl,
+  useMap,
   useMapEvents,
 } from 'react-leaflet'
 
@@ -48,6 +49,31 @@ function MapClickHandler({
   return null
 }
 
+function MapCursorHandler({ isDrawMode }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    const cursorValue = isDrawMode ? 'crosshair' : ''
+
+    container.style.cursor = cursorValue
+    container.querySelectorAll('.leaflet-pane, .leaflet-interactive').forEach((el) => {
+      el.style.cursor = cursorValue
+    })
+
+    return () => {
+      container.style.cursor = ''
+      container
+        .querySelectorAll('.leaflet-pane, .leaflet-interactive')
+        .forEach((el) => {
+          el.style.cursor = ''
+        })
+    }
+  }, [isDrawMode, map])
+
+  return null
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
@@ -73,6 +99,7 @@ function MapCanvas({
   const isPolygonMode = activeWorkModeId === 'polygon'
   const isSelectMode = activeWorkModeId === 'select'
   const isDeleteMode = activeWorkModeId === 'delete'
+  const isDrawMode = isPointMode || isLineMode || isPolygonMode
   const recentlyDraggedPointKeysRef = useRef(new Set())
 
   const createPointIcon = (color) =>
@@ -177,8 +204,8 @@ function MapCanvas({
         zoom={DEFAULT_ZOOM}
         zoomControl={false}
         className="map-canvas"
-        style={{ cursor: isPointMode || isLineMode || isPolygonMode ? 'crosshair' : '' }}
       >
+        <MapCursorHandler isDrawMode={isDrawMode} />
         <MapClickHandler
           canAddPoint={isPointMode}
           canAddLine={isLineMode}
