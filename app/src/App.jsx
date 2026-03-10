@@ -70,6 +70,18 @@ function getNextPointLayerName(layers) {
   return `Nova capa ${nextIndex}`
 }
 
+function getNextLineLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nova línia (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nova línia ${nextIndex}`
+}
+
 function getPointLayerForNewPoint(layers, activePointLayerId) {
   const activeLayer = layers.find(
     (layer) => layer.id === activePointLayerId && layer.geometryType === 'point',
@@ -98,6 +110,12 @@ function App() {
   const [selectedBasemapId, setSelectedBasemapId] = useState(defaultBasemapId)
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
+  const [activeLineLayerId, setActiveLineLayerId] = useState(() => {
+    const initialLineLayer = ensureInitialPointLayer(mockLayers).find(
+      (layer) => layer.geometryType === 'line',
+    )
+    return initialLineLayer?.id || null
+  })
 
   const selectedBasemap = useMemo(
     () =>
@@ -143,6 +161,27 @@ function App() {
           name: nextLayerName,
           color: '#d4335b',
           geometryType: 'point',
+          visible: true,
+          legendLabel: nextLayerName,
+          features: [],
+        },
+      ]
+    })
+  }
+
+  const handleCreateLineLayer = () => {
+    const nextLayerId = `line-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    setActiveLineLayerId(nextLayerId)
+    setLayers((currentLayers) => {
+      const nextLayerName = getNextLineLayerName(currentLayers)
+
+      return [
+        ...currentLayers,
+        {
+          id: nextLayerId,
+          name: nextLayerName,
+          color: '#ea8b1f',
+          geometryType: 'line',
           visible: true,
           legendLabel: nextLayerName,
           features: [],
@@ -239,9 +278,11 @@ function App() {
     )
   }
 
-  const handleRenamePointLayer = (layerId) => {
+  const handleRenameLayer = (layerId) => {
     const layerToRename = layers.find(
-      (layer) => layer.id === layerId && layer.geometryType === 'point',
+      (layer) =>
+        layer.id === layerId &&
+        (layer.geometryType === 'point' || layer.geometryType === 'line'),
     )
 
     if (!layerToRename) {
@@ -265,10 +306,12 @@ function App() {
     )
   }
 
-  const handleDeletePointLayer = (layerId) => {
+  const handleDeleteLayer = (layerId) => {
     setLayers((currentLayers) => {
       const layerToDelete = currentLayers.find(
-        (layer) => layer.id === layerId && layer.geometryType === 'point',
+        (layer) =>
+          layer.id === layerId &&
+          (layer.geometryType === 'point' || layer.geometryType === 'line'),
       )
 
       if (!layerToDelete) {
@@ -280,7 +323,11 @@ function App() {
         : []
 
       if (layerFeatures.length > 0) {
-        window.alert('No es pot eliminar una capa amb punts')
+        const message =
+          layerToDelete.geometryType === 'line'
+            ? 'No es pot eliminar una capa amb elements'
+            : 'No es pot eliminar una capa amb punts'
+        window.alert(message)
         return currentLayers
       }
 
@@ -300,6 +347,15 @@ function App() {
         setActivePointLayerId(nextActivePointLayer)
       }
 
+      if (activeLineLayerId === layerId) {
+        const remainingLineLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'line',
+        )
+        const nextActiveLineLayer =
+          remainingLineLayers[remainingLineLayers.length - 1]?.id || null
+        setActiveLineLayerId(nextActiveLineLayer)
+      }
+
       return nextLayers
     })
   }
@@ -316,11 +372,14 @@ function App() {
         <LayersPanel
           layers={layers}
           activePointLayerId={activePointLayerId}
+          activeLineLayerId={activeLineLayerId}
           onSetActivePointLayer={setActivePointLayerId}
+          onSetActiveLineLayer={setActiveLineLayerId}
           onLayerVisibilityChange={handleLayerVisibilityChange}
           onCreatePointLayer={handleCreatePointLayer}
-          onRenamePointLayer={handleRenamePointLayer}
-          onDeletePointLayer={handleDeletePointLayer}
+          onCreateLineLayer={handleCreateLineLayer}
+          onRenameLayer={handleRenameLayer}
+          onDeleteLayer={handleDeleteLayer}
         />
         <section className="map-workspace">
           <MapToolbarSimple
