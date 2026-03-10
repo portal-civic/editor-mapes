@@ -207,8 +207,219 @@ function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
 }
 
+function toLatLng(coordinates) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return null
+  }
+
+  const lng = Number(coordinates[0])
+  const lat = Number(coordinates[1])
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null
+  }
+
+  return [lat, lng]
+}
+
+function getFeatureLabel(properties) {
+  if (!properties || typeof properties !== 'object') {
+    return ''
+  }
+
+  const rawLabel = properties.label ?? properties.name ?? properties.title
+  return typeof rawLabel === 'string' ? rawLabel : ''
+}
+
+function normalizeGeoJSONInput(geojsonData) {
+  if (!geojsonData || typeof geojsonData !== 'object') {
+    return null
+  }
+
+  if (geojsonData.type === 'FeatureCollection' && Array.isArray(geojsonData.features)) {
+    return geojsonData.features
+  }
+
+  if (geojsonData.type === 'Feature') {
+    return [geojsonData]
+  }
+
+  const validGeometryTypes = new Set([
+    'Point',
+    'MultiPoint',
+    'LineString',
+    'MultiLineString',
+    'Polygon',
+    'MultiPolygon',
+  ])
+
+  if (validGeometryTypes.has(geojsonData.type)) {
+    return [{ type: 'Feature', geometry: geojsonData, properties: {} }]
+  }
+
+  return null
+}
+
+function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
+  const normalizedFeatures = normalizeGeoJSONInput(geojsonData)
+  if (!normalizedFeatures) {
+    return null
+  }
+
+  const points = []
+  const lines = []
+  const polygons = []
+  const baseId = `${Date.now()}-${Math.round(Math.random() * 10000)}`
+  const importName = fileName.replace(/\.(geo)?json$/i, '').trim() || 'GeoJSON'
+
+  const pushPoint = (coordinates, label, sourceId) => {
+    const latlng = toLatLng(coordinates)
+    if (!latlng) {
+      return
+    }
+
+    points.push({
+      id: sourceId
+        ? `pt-import-${baseId}-${sourceId}-${points.length + 1}`
+        : `pt-import-${baseId}-${points.length + 1}`,
+      name: `Punt ${points.length + 1}`,
+      label,
+      coordinates: latlng,
+    })
+  }
+
+  const pushLine = (coordinates, label, sourceId) => {
+    if (!Array.isArray(coordinates)) {
+      return
+    }
+
+    const latlngs = coordinates.map(toLatLng).filter(Boolean)
+    if (latlngs.length < 2) {
+      return
+    }
+
+    lines.push({
+      id: sourceId
+        ? `ln-import-${baseId}-${sourceId}-${lines.length + 1}`
+        : `ln-import-${baseId}-${lines.length + 1}`,
+      label,
+      latlngs,
+    })
+  }
+
+  const pushPolygon = (coordinates, label, sourceId) => {
+    if (!Array.isArray(coordinates) || coordinates.length === 0) {
+      return
+    }
+
+    const rings = coordinates
+      .map((ring) => (Array.isArray(ring) ? ring.map(toLatLng).filter(Boolean) : null))
+      .filter((ring) => Array.isArray(ring) && ring.length >= 3)
+
+    if (rings.length === 0) {
+      return
+    }
+
+    polygons.push({
+      id: sourceId
+        ? `pg-import-${baseId}-${sourceId}-${polygons.length + 1}`
+        : `pg-import-${baseId}-${polygons.length + 1}`,
+      label,
+      latlngs: rings,
+    })
+  }
+
+  normalizedFeatures.forEach((feature, featureIndex) => {
+    const geometry = feature?.geometry
+    if (!geometry || typeof geometry !== 'object') {
+      return
+    }
+
+    const label = getFeatureLabel(feature.properties)
+    const sourceId =
+      feature.id != null && feature.id !== '' ? String(feature.id) : String(featureIndex + 1)
+
+    if (geometry.type === 'Point') {
+      pushPoint(geometry.coordinates, label, sourceId)
+      return
+    }
+
+    if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
+      geometry.coordinates.forEach((coordinates) => {
+        pushPoint(coordinates, label, sourceId)
+      })
+      return
+    }
+
+    if (geometry.type === 'LineString') {
+      pushLine(geometry.coordinates, label, sourceId)
+      return
+    }
+
+    if (geometry.type === 'MultiLineString' && Array.isArray(geometry.coordinates)) {
+      geometry.coordinates.forEach((lineCoordinates) => {
+        pushLine(lineCoordinates, label, sourceId)
+      })
+      return
+    }
+
+    if (geometry.type === 'Polygon') {
+      pushPolygon(geometry.coordinates, label, sourceId)
+      return
+    }
+
+    if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+      geometry.coordinates.forEach((polygonCoordinates) => {
+        pushPolygon(polygonCoordinates, label, sourceId)
+      })
+    }
+  })
+
+  return {
+    pointLayer:
+      points.length > 0
+        ? {
+            id: `point-import-${baseId}`,
+            name: `${importName} · punts`,
+            color: DEFAULT_LAYER_COLORS.point,
+            geometryType: 'point',
+            visible: true,
+            legendLabel: `${importName} · punts`,
+            style: getDefaultLayerStyle('point', DEFAULT_LAYER_COLORS.point),
+            features: points,
+          }
+        : null,
+    lineLayer:
+      lines.length > 0
+        ? {
+            id: `line-import-${baseId}`,
+            name: `${importName} · línies`,
+            color: DEFAULT_LAYER_COLORS.line,
+            geometryType: 'line',
+            visible: true,
+            legendLabel: `${importName} · línies`,
+            style: getDefaultLayerStyle('line', DEFAULT_LAYER_COLORS.line),
+            features: lines,
+          }
+        : null,
+    polygonLayer:
+      polygons.length > 0
+        ? {
+            id: `polygon-import-${baseId}`,
+            name: `${importName} · polígons`,
+            color: DEFAULT_LAYER_COLORS.polygon,
+            geometryType: 'polygon',
+            visible: true,
+            legendLabel: `${importName} · polígons`,
+            style: getDefaultLayerStyle('polygon', DEFAULT_LAYER_COLORS.polygon),
+            features: polygons,
+          }
+        : null,
+  }
+}
+
 function App() {
   const importInputRef = useRef(null)
+  const importGeoJSONInputRef = useRef(null)
   const [layers, setLayers] = useState(() => {
     const seededLayers = mockLayers.map((layer) => ({
       ...layer,
@@ -404,6 +615,10 @@ function App() {
     importInputRef.current?.click()
   }
 
+  const handleImportGeoJSONClick = () => {
+    importGeoJSONInputRef.current?.click()
+  }
+
   const handleImportProjectFileChange = async (event) => {
     const selectedFile = event.target.files?.[0]
     if (!selectedFile) {
@@ -470,6 +685,54 @@ function App() {
       }
     } catch {
       window.alert('No s’ha pogut llegir el fitxer de projecte')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const handleImportGeoJSONFileChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) {
+      return
+    }
+
+    try {
+      const fileContent = await selectedFile.text()
+      const parsedData = JSON.parse(fileContent)
+      const importedLayers = buildImportedLayersFromGeoJSON(
+        parsedData,
+        selectedFile.name,
+      )
+
+      if (!importedLayers) {
+        window.alert('GeoJSON no vàlid')
+        return
+      }
+
+      const nextLayersToAdd = [
+        importedLayers.pointLayer,
+        importedLayers.lineLayer,
+        importedLayers.polygonLayer,
+      ].filter(Boolean)
+
+      if (nextLayersToAdd.length === 0) {
+        window.alert('No s’han trobat geometries compatibles en el GeoJSON')
+        return
+      }
+
+      setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, ...nextLayersToAdd]))
+
+      if (importedLayers.pointLayer) {
+        setActivePointLayerId(importedLayers.pointLayer.id)
+      }
+      if (importedLayers.lineLayer) {
+        setActiveLineLayerId(importedLayers.lineLayer.id)
+      }
+      if (importedLayers.polygonLayer) {
+        setActivePolygonLayerId(importedLayers.polygonLayer.id)
+      }
+    } catch {
+      window.alert('No s’ha pogut importar el fitxer GeoJSON')
     } finally {
       event.target.value = ''
     }
@@ -961,12 +1224,20 @@ function App() {
         style={{ display: 'none' }}
         onChange={handleImportProjectFileChange}
       />
+      <input
+        ref={importGeoJSONInputRef}
+        type="file"
+        accept=".geojson,application/geo+json,application/json,.json"
+        style={{ display: 'none' }}
+        onChange={handleImportGeoJSONFileChange}
+      />
       <TopBar
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
         onMunicipalitySelect={handleMunicipalitySelect}
         onOpenProject={handleOpenProjectClick}
+        onImportGeoJSON={handleImportGeoJSONClick}
         onExportProject={handleExportProject}
       />
 
