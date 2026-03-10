@@ -1,4 +1,6 @@
-import { CircleMarker, MapContainer, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
+import { useRef } from 'react'
+import L from 'leaflet'
+import { MapContainer, Marker, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -26,15 +28,30 @@ function MapCanvas({
   pointFeatures = [],
   onPointAdd,
   onPointDelete,
+  onPointMove,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
   const isPointMode = activeWorkModeId === 'point'
   const isSelectMode = activeWorkModeId === 'select'
+  const recentlyDraggedPointKeysRef = useRef(new Set())
+
+  const createPointIcon = (color) =>
+    L.divIcon({
+      className: '',
+      html: `<span style="display:block;width:14px;height:14px;border-radius:999px;border:2px solid ${color};background:${color};opacity:0.9;"></span>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    })
 
   const handlePointClick = (point, event) => {
     if (!isSelectMode) {
+      return
+    }
+
+    const pointKey = `${point.layerId}-${point.id}`
+    if (recentlyDraggedPointKeysRef.current.has(pointKey)) {
       return
     }
 
@@ -46,6 +63,24 @@ function MapCanvas({
     }
 
     onPointDelete?.({ layerId: point.layerId, pointId: point.id })
+  }
+
+  const handlePointDragEnd = (point, event) => {
+    if (!isSelectMode) {
+      return
+    }
+
+    const latLng = event.target.getLatLng()
+    const pointKey = `${point.layerId}-${point.id}`
+    recentlyDraggedPointKeysRef.current.add(pointKey)
+    setTimeout(() => recentlyDraggedPointKeysRef.current.delete(pointKey), 250)
+
+    onPointMove?.({
+      layerId: point.layerId,
+      pointId: point.id,
+      lat: latLng.lat,
+      lng: latLng.lng,
+    })
   }
 
   return (
@@ -62,18 +97,14 @@ function MapCanvas({
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
 
         {pointFeatures.map((point) => (
-          <CircleMarker
-            key={point.id}
-            center={point.coordinates}
-            radius={7}
+          <Marker
+            key={`${point.layerId}-${point.id}`}
+            position={point.coordinates}
+            icon={createPointIcon(point.color || '#d4335b')}
+            draggable={isSelectMode}
             eventHandlers={{
               click: (event) => handlePointClick(point, event),
-            }}
-            pathOptions={{
-              color: point.color || '#d4335b',
-              fillColor: point.color || '#d4335b',
-              fillOpacity: 0.9,
-              weight: 2,
+              dragend: (event) => handlePointDragEnd(point, event),
             }}
           />
         ))}
