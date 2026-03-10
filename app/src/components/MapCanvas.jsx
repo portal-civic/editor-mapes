@@ -3,6 +3,7 @@ import L from 'leaflet'
 import {
   MapContainer,
   Marker,
+  Polygon,
   Polyline,
   TileLayer,
   Tooltip,
@@ -15,7 +16,14 @@ const DEFAULT_ZOOM = 6
 const FALLBACK_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const FALLBACK_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 
-function MapClickHandler({ canAddPoint, canAddLine, onPointAdd, onLinePointAdd }) {
+function MapClickHandler({
+  canAddPoint,
+  canAddLine,
+  canAddPolygon,
+  onPointAdd,
+  onLinePointAdd,
+  onPolygonPointAdd,
+}) {
   useMapEvents({
     click(event) {
       if (canAddPoint) {
@@ -27,6 +35,12 @@ function MapClickHandler({ canAddPoint, canAddLine, onPointAdd, onLinePointAdd }
       if (canAddLine) {
         const { lat, lng } = event.latlng
         onLinePointAdd?.([lat, lng])
+        return
+      }
+
+      if (canAddPolygon) {
+        const { lat, lng } = event.latlng
+        onPolygonPointAdd?.([lat, lng])
       }
     },
   })
@@ -39,18 +53,24 @@ function MapCanvas({
   activeWorkModeId = 'select',
   pointFeatures = [],
   lineFeatures = [],
+  polygonFeatures = [],
   draftLinePoints = [],
+  draftPolygonPoints = [],
   onPointAdd,
   onPointDelete,
   onPointMove,
   onPointUpdateLabel,
+  onLineDelete,
+  onPolygonDelete,
   onDraftLinePointAdd,
+  onDraftPolygonPointAdd,
 }) {
   const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
   const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
   const maxZoom = selectedBasemap?.maxZoom || 19
   const isPointMode = activeWorkModeId === 'point'
   const isLineMode = activeWorkModeId === 'line'
+  const isPolygonMode = activeWorkModeId === 'polygon'
   const isSelectMode = activeWorkModeId === 'select'
   const isDeleteMode = activeWorkModeId === 'delete'
   const recentlyDraggedPointKeysRef = useRef(new Set())
@@ -117,6 +137,39 @@ function MapCanvas({
     })
   }
 
+  const handleLineClick = (lineFeature, event) => {
+    if (!isDeleteMode) {
+      return
+    }
+
+    event.originalEvent?.stopPropagation()
+
+    const shouldDelete = window.confirm('Eliminar línia?')
+    if (!shouldDelete) {
+      return
+    }
+
+    onLineDelete?.({ layerId: lineFeature.layerId, lineId: lineFeature.id })
+  }
+
+  const handlePolygonClick = (polygonFeature, event) => {
+    if (!isDeleteMode) {
+      return
+    }
+
+    event.originalEvent?.stopPropagation()
+
+    const shouldDelete = window.confirm('Eliminar polígon?')
+    if (!shouldDelete) {
+      return
+    }
+
+    onPolygonDelete?.({
+      layerId: polygonFeature.layerId,
+      polygonId: polygonFeature.id,
+    })
+  }
+
   return (
     <section className="map-stage" aria-label="Zona central del mapa">
       <MapContainer
@@ -124,13 +177,15 @@ function MapCanvas({
         zoom={DEFAULT_ZOOM}
         zoomControl={false}
         className="map-canvas"
-        style={{ cursor: isPointMode || isLineMode ? 'crosshair' : '' }}
+        style={{ cursor: isPointMode || isLineMode || isPolygonMode ? 'crosshair' : '' }}
       >
         <MapClickHandler
           canAddPoint={isPointMode}
           canAddLine={isLineMode}
+          canAddPolygon={isPolygonMode}
           onPointAdd={onPointAdd}
           onLinePointAdd={onDraftLinePointAdd}
+          onPolygonPointAdd={onDraftPolygonPointAdd}
         />
         <ZoomControl position="topright" />
         <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={maxZoom} />
@@ -141,9 +196,13 @@ function MapCanvas({
             positions={lineFeature.latlngs}
             pathOptions={{
               color: lineFeature.color || '#ea8b1f',
-              weight: 3,
+              weight: isDeleteMode ? 6 : 3,
             }}
-            interactive={false}
+            interactive
+            bubblingMouseEvents={false}
+            eventHandlers={{
+              click: (event) => handleLineClick(lineFeature, event),
+            }}
           />
         ))}
 
@@ -157,6 +216,51 @@ function MapCanvas({
             }}
             interactive={false}
           />
+        ) : null}
+
+        {polygonFeatures.map((polygonFeature) => (
+          <Polygon
+            key={`${polygonFeature.layerId}-${polygonFeature.id}`}
+            positions={polygonFeature.latlngs}
+            pathOptions={{
+              color: polygonFeature.color || '#2f7de1',
+              weight: 2,
+              fillColor: polygonFeature.color || '#2f7de1',
+              fillOpacity: 0.18,
+            }}
+            interactive={isDeleteMode}
+            bubblingMouseEvents={false}
+            eventHandlers={{
+              click: (event) => handlePolygonClick(polygonFeature, event),
+            }}
+          />
+        ))}
+
+        {isPolygonMode && draftPolygonPoints.length > 0 ? (
+          <>
+            <Polyline
+              positions={draftPolygonPoints}
+              pathOptions={{
+                color: '#2f7de1',
+                weight: 2,
+                dashArray: '6,6',
+              }}
+              interactive={false}
+            />
+            {draftPolygonPoints.length >= 3 ? (
+              <Polygon
+                positions={draftPolygonPoints}
+                pathOptions={{
+                  color: '#2f7de1',
+                  weight: 2,
+                  fillColor: '#2f7de1',
+                  fillOpacity: 0.12,
+                  dashArray: '6,6',
+                }}
+                interactive={false}
+              />
+            ) : null}
+          </>
         ) : null}
 
         {pointFeatures.map((point) => (

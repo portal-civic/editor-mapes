@@ -82,6 +82,18 @@ function getNextLineLayerName(layers) {
   return `Nova línia ${nextIndex}`
 }
 
+function getNextPolygonLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nou polígon (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nou polígon ${nextIndex}`
+}
+
 function getPointLayerForNewPoint(layers, activePointLayerId) {
   const activeLayer = layers.find(
     (layer) => layer.id === activePointLayerId && layer.geometryType === 'point',
@@ -114,6 +126,22 @@ function getLineLayerForNewFeature(layers, activeLineLayerId) {
   return visibleLineLayers[visibleLineLayers.length - 1] || null
 }
 
+function getPolygonLayerForNewFeature(layers, activePolygonLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activePolygonLayerId && layer.geometryType === 'polygon',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visiblePolygonLayers = layers.filter(
+    (layer) => layer.geometryType === 'polygon' && layer.visible,
+  )
+
+  return visiblePolygonLayers[visiblePolygonLayers.length - 1] || null
+}
+
 function App() {
   const [layers, setLayers] = useState(() => {
     const seededLayers = mockLayers.map((layer) => ({
@@ -127,11 +155,18 @@ function App() {
   const [activeWorkModeId, setActiveWorkModeId] = useState('select')
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
   const [draftLinePoints, setDraftLinePoints] = useState([])
+  const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
   const [activeLineLayerId, setActiveLineLayerId] = useState(() => {
     const initialLineLayer = ensureInitialPointLayer(mockLayers).find(
       (layer) => layer.geometryType === 'line',
     )
     return initialLineLayer?.id || null
+  })
+  const [activePolygonLayerId, setActivePolygonLayerId] = useState(() => {
+    const initialPolygonLayer = ensureInitialPointLayer(mockLayers).find(
+      (layer) => layer.geometryType === 'polygon',
+    )
+    return initialPolygonLayer?.id || null
   })
 
   const selectedBasemap = useMemo(
@@ -174,10 +209,30 @@ function App() {
     [layers],
   )
 
+  const visiblePolygonFeatures = useMemo(
+    () =>
+      layers
+        .filter((layer) => layer.geometryType === 'polygon' && layer.visible)
+        .flatMap((layer) => {
+          const features = Array.isArray(layer.features) ? layer.features : []
+          return features
+            .filter((feature) => Array.isArray(feature.latlngs))
+            .map((feature) => ({
+              ...feature,
+              color: layer.color,
+              layerId: layer.id,
+            }))
+        }),
+    [layers],
+  )
+
   const handleWorkModeChange = (nextMode) => {
     setActiveWorkModeId(nextMode)
     if (nextMode !== 'line') {
       setDraftLinePoints([])
+    }
+    if (nextMode !== 'polygon') {
+      setDraftPolygonPoints([])
     }
   }
 
@@ -223,6 +278,27 @@ function App() {
           name: nextLayerName,
           color: '#ea8b1f',
           geometryType: 'line',
+          visible: true,
+          legendLabel: nextLayerName,
+          features: [],
+        },
+      ]
+    })
+  }
+
+  const handleCreatePolygonLayer = () => {
+    const nextLayerId = `polygon-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    setActivePolygonLayerId(nextLayerId)
+    setLayers((currentLayers) => {
+      const nextLayerName = getNextPolygonLayerName(currentLayers)
+
+      return [
+        ...currentLayers,
+        {
+          id: nextLayerId,
+          name: nextLayerName,
+          color: '#2f7de1',
+          geometryType: 'polygon',
           visible: true,
           legendLabel: nextLayerName,
           features: [],
@@ -319,6 +395,38 @@ function App() {
     )
   }
 
+  const handleMapLineDelete = ({ layerId, lineId }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'line') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.filter((feature) => feature.id !== lineId),
+        }
+      }),
+    )
+  }
+
+  const handleMapPolygonDelete = ({ layerId, polygonId }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'polygon') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.filter((feature) => feature.id !== polygonId),
+        }
+      }),
+    )
+  }
+
   const handleDraftLinePointAdd = (coordinates) => {
     const targetLineLayer = getLineLayerForNewFeature(layers, activeLineLayerId)
 
@@ -368,11 +476,68 @@ function App() {
     setDraftLinePoints([])
   }
 
+  const handleDraftPolygonPointAdd = (coordinates) => {
+    const targetPolygonLayer = getPolygonLayerForNewFeature(
+      layers,
+      activePolygonLayerId,
+    )
+
+    if (!targetPolygonLayer) {
+      window.alert('Cal una capa de polígon activa')
+      return
+    }
+
+    setDraftPolygonPoints((currentPoints) => [...currentPoints, coordinates])
+  }
+
+  const handleDraftPolygonCancel = () => {
+    setDraftPolygonPoints([])
+  }
+
+  const handleDraftPolygonFinish = () => {
+    if (draftPolygonPoints.length < 3) {
+      return
+    }
+
+    const targetPolygonLayer = getPolygonLayerForNewFeature(
+      layers,
+      activePolygonLayerId,
+    )
+    if (!targetPolygonLayer) {
+      window.alert('Cal una capa de polígon activa')
+      return
+    }
+
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== targetPolygonLayer.id || layer.geometryType !== 'polygon') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: [
+            ...currentFeatures,
+            {
+              id: `pg-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              latlngs: [...draftPolygonPoints],
+            },
+          ],
+        }
+      }),
+    )
+
+    setDraftPolygonPoints([])
+  }
+
   const handleRenameLayer = (layerId) => {
     const layerToRename = layers.find(
       (layer) =>
         layer.id === layerId &&
-        (layer.geometryType === 'point' || layer.geometryType === 'line'),
+        (layer.geometryType === 'point' ||
+          layer.geometryType === 'line' ||
+          layer.geometryType === 'polygon'),
     )
 
     if (!layerToRename) {
@@ -401,7 +566,9 @@ function App() {
       const layerToDelete = currentLayers.find(
         (layer) =>
           layer.id === layerId &&
-          (layer.geometryType === 'point' || layer.geometryType === 'line'),
+          (layer.geometryType === 'point' ||
+            layer.geometryType === 'line' ||
+            layer.geometryType === 'polygon'),
       )
 
       if (!layerToDelete) {
@@ -414,9 +581,9 @@ function App() {
 
       if (layerFeatures.length > 0) {
         const message =
-          layerToDelete.geometryType === 'line'
-            ? 'No es pot eliminar una capa amb elements'
-            : 'No es pot eliminar una capa amb punts'
+          layerToDelete.geometryType === 'point'
+            ? 'No es pot eliminar una capa amb punts'
+            : 'No es pot eliminar una capa amb elements'
         window.alert(message)
         return currentLayers
       }
@@ -446,6 +613,15 @@ function App() {
         setActiveLineLayerId(nextActiveLineLayer)
       }
 
+      if (activePolygonLayerId === layerId) {
+        const remainingPolygonLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'polygon',
+        )
+        const nextActivePolygonLayer =
+          remainingPolygonLayers[remainingPolygonLayers.length - 1]?.id || null
+        setActivePolygonLayerId(nextActivePolygonLayer)
+      }
+
       return nextLayers
     })
   }
@@ -463,11 +639,14 @@ function App() {
           layers={layers}
           activePointLayerId={activePointLayerId}
           activeLineLayerId={activeLineLayerId}
+          activePolygonLayerId={activePolygonLayerId}
           onSetActivePointLayer={setActivePointLayerId}
           onSetActiveLineLayer={setActiveLineLayerId}
+          onSetActivePolygonLayer={setActivePolygonLayerId}
           onLayerVisibilityChange={handleLayerVisibilityChange}
           onCreatePointLayer={handleCreatePointLayer}
           onCreateLineLayer={handleCreateLineLayer}
+          onCreatePolygonLayer={handleCreatePolygonLayer}
           onRenameLayer={handleRenameLayer}
           onDeleteLayer={handleDeleteLayer}
         />
@@ -490,17 +669,36 @@ function App() {
               </button>
             </div>
           ) : null}
+          {activeWorkModeId === 'polygon' && draftPolygonPoints.length > 0 ? (
+            <div>
+              <button
+                type="button"
+                onClick={handleDraftPolygonFinish}
+                disabled={draftPolygonPoints.length < 3}
+              >
+                Acabar polígon
+              </button>{' '}
+              <button type="button" onClick={handleDraftPolygonCancel}>
+                Cancel·lar
+              </button>
+            </div>
+          ) : null}
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
+            polygonFeatures={visiblePolygonFeatures}
             draftLinePoints={draftLinePoints}
+            draftPolygonPoints={draftPolygonPoints}
             onPointAdd={handleMapPointAdd}
             onPointDelete={handleMapPointDelete}
             onPointMove={handleMapPointMove}
             onPointUpdateLabel={handleMapPointUpdateLabel}
+            onLineDelete={handleMapLineDelete}
+            onPolygonDelete={handleMapPolygonDelete}
             onDraftLinePointAdd={handleDraftLinePointAdd}
+            onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
           />
         </section>
         <LegendPanel layers={layers} />

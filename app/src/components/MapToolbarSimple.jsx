@@ -29,7 +29,12 @@ function MapToolbarSimple({ activeWorkModeId, onModeChange }) {
         >
           Línia
         </button>
-        <button type="button" className="tool-btn" disabled>
+        <button
+          type="button"
+          className={`tool-btn ${activeWorkModeId === 'polygon' ? 'active' : ''}`}
+          aria-pressed={activeWorkModeId === 'polygon'}
+          onClick={() => onModeChange('polygon')}
+        >
           Polígon
         </button>
       </div>

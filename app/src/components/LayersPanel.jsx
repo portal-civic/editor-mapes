@@ -2,11 +2,14 @@ function LayersPanel({
   layers = [],
   activePointLayerId,
   activeLineLayerId,
+  activePolygonLayerId,
   onSetActivePointLayer,
   onSetActiveLineLayer,
+  onSetActivePolygonLayer,
   onLayerVisibilityChange,
   onCreatePointLayer,
   onCreateLineLayer,
+  onCreatePolygonLayer,
   onRenameLayer,
   onDeleteLayer,
 }) {
@@ -20,6 +23,9 @@ function LayersPanel({
           </button>{' '}
           <button type="button" onClick={onCreateLineLayer}>
             + Línia
+          </button>{' '}
+          <button type="button" onClick={onCreatePolygonLayer}>
+            + Polígon
           </button>
         </div>
       </div>
@@ -27,9 +33,13 @@ function LayersPanel({
         {layers.map((layer) => {
           const isPointLayer = layer.geometryType === 'point'
           const isLineLayer = layer.geometryType === 'line'
+          const isPolygonLayer = layer.geometryType === 'polygon'
           const isActivePointLayer = isPointLayer && layer.id === activePointLayerId
           const isActiveLineLayer = isLineLayer && layer.id === activeLineLayerId
-          const isActiveVectorLayer = isActivePointLayer || isActiveLineLayer
+          const isActivePolygonLayer =
+            isPolygonLayer && layer.id === activePolygonLayerId
+          const isActiveVectorLayer =
+            isActivePointLayer || isActiveLineLayer || isActivePolygonLayer
 
           return (
             <article
@@ -47,18 +57,24 @@ function LayersPanel({
               <p className="layer-meta">
                 {layer.geometryType} · {layer.visible ? 'visible' : 'oculta'}
               </p>
-              {isPointLayer || isLineLayer ? (
+              {isPointLayer || isLineLayer || isPolygonLayer ? (
                 <>
                   {isActiveVectorLayer ? (
                     <p className="layer-active-indicator">Activa</p>
                   ) : (
                     <button
                       type="button"
-                      onClick={() =>
-                        isPointLayer
-                          ? onSetActivePointLayer?.(layer.id)
-                          : onSetActiveLineLayer?.(layer.id)
-                      }
+                      onClick={() => {
+                        if (isPointLayer) {
+                          onSetActivePointLayer?.(layer.id)
+                          return
+                        }
+                        if (isLineLayer) {
+                          onSetActiveLineLayer?.(layer.id)
+                          return
+                        }
+                        onSetActivePolygonLayer?.(layer.id)
+                      }}
                     >
                       Activar
                     </button>
