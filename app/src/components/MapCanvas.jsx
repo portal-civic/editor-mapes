@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
+  CircleMarker,
   MapContainer,
   Marker,
   Polygon,
@@ -74,6 +75,30 @@ function MapCursorHandler({ isDrawMode }) {
   return null
 }
 
+function MapHoverHandler({ isDrawMode, onHoverChange }) {
+  useMapEvents({
+    mousemove(event) {
+      if (!isDrawMode) {
+        return
+      }
+
+      const { lat, lng } = event.latlng
+      onHoverChange?.([lat, lng])
+    },
+    mouseout() {
+      onHoverChange?.(null)
+    },
+  })
+
+  useEffect(() => {
+    if (!isDrawMode) {
+      onHoverChange?.(null)
+    }
+  }, [isDrawMode, onHoverChange])
+
+  return null
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
@@ -101,6 +126,7 @@ function MapCanvas({
   const isDeleteMode = activeWorkModeId === 'delete'
   const isDrawMode = isPointMode || isLineMode || isPolygonMode
   const recentlyDraggedPointKeysRef = useRef(new Set())
+  const [hoverLatLng, setHoverLatLng] = useState(null)
 
   const createPointIcon = (color) =>
     L.divIcon({
@@ -206,6 +232,7 @@ function MapCanvas({
         className="map-canvas"
       >
         <MapCursorHandler isDrawMode={isDrawMode} />
+        <MapHoverHandler isDrawMode={isDrawMode} onHoverChange={setHoverLatLng} />
         <MapClickHandler
           canAddPoint={isPointMode}
           canAddLine={isLineMode}
@@ -240,6 +267,19 @@ function MapCanvas({
               color: '#ea8b1f',
               weight: 3,
               dashArray: '6,6',
+            }}
+            interactive={false}
+          />
+        ) : null}
+
+        {isLineMode && hoverLatLng && draftLinePoints.length > 0 ? (
+          <Polyline
+            positions={[draftLinePoints[draftLinePoints.length - 1], hoverLatLng]}
+            pathOptions={{
+              color: '#ea8b1f',
+              weight: 2,
+              dashArray: '4,6',
+              opacity: 0.7,
             }}
             interactive={false}
           />
@@ -288,6 +328,36 @@ function MapCanvas({
               />
             ) : null}
           </>
+        ) : null}
+
+        {isPolygonMode && hoverLatLng && draftPolygonPoints.length > 0 ? (
+          <Polyline
+            positions={[
+              draftPolygonPoints[draftPolygonPoints.length - 1],
+              hoverLatLng,
+            ]}
+            pathOptions={{
+              color: '#2f7de1',
+              weight: 2,
+              dashArray: '4,6',
+              opacity: 0.7,
+            }}
+            interactive={false}
+          />
+        ) : null}
+
+        {isDrawMode && hoverLatLng ? (
+          <CircleMarker
+            center={hoverLatLng}
+            radius={5}
+            pathOptions={{
+              color: '#0f4c81',
+              fillColor: '#0f4c81',
+              fillOpacity: 0.25,
+              weight: 2,
+            }}
+            interactive={false}
+          />
         ) : null}
 
         {pointFeatures.map((point) => (
