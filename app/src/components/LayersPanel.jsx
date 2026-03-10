@@ -15,6 +15,8 @@ function LayersPanel({
   onRenameLayer,
   onDeleteLayer,
   onLayerStyleChange,
+  onMoveLayerUp,
+  onMoveLayerDown,
 }) {
   const [openStyleLayerId, setOpenStyleLayerId] = useState(null)
 
@@ -35,7 +37,7 @@ function LayersPanel({
         </div>
       </div>
       <div className="panel-content">
-        {layers.map((layer) => {
+        {layers.map((layer, layerIndex) => {
           const isPointLayer = layer.geometryType === 'point'
           const isLineLayer = layer.geometryType === 'line'
           const isPolygonLayer = layer.geometryType === 'polygon'
@@ -98,6 +100,20 @@ function LayersPanel({
                   </button>
                   <button type="button" onClick={() => onDeleteLayer?.(layer.id)}>
                     Eliminar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={layerIndex === 0}
+                    onClick={() => onMoveLayerUp?.(layer.id)}
+                  >
+                    Pujar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={layerIndex === layers.length - 1}
+                    onClick={() => onMoveLayerDown?.(layer.id)}
+                  >
+                    Baixar
                   </button>
                   <button
                     type="button"

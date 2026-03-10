@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   CircleMarker,
@@ -29,6 +29,10 @@ function getDashArray(dashStyle) {
   }
 
   return undefined
+}
+
+function getLayerPaneName(layerId) {
+  return `user-layer-${String(layerId).replace(/[^a-zA-Z0-9-_]/g, '_')}`
 }
 
 function MapClickHandler({
@@ -170,6 +174,20 @@ function MapViewSync({ center, zoom, navigationRequest }) {
   return null
 }
 
+function MapLayerPanes({ orderedLayerIds }) {
+  const map = useMap()
+
+  useEffect(() => {
+    orderedLayerIds.forEach((layerId, index) => {
+      const paneName = getLayerPaneName(layerId)
+      const pane = map.getPane(paneName) || map.createPane(paneName)
+      pane.style.zIndex = String(700 + (orderedLayerIds.length - index))
+    })
+  }, [map, orderedLayerIds])
+
+  return null
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
@@ -179,6 +197,7 @@ function MapCanvas({
   pointFeatures = [],
   lineFeatures = [],
   polygonFeatures = [],
+  visibleLayerOrder = [],
   selectedMunicipalityGeometry = null,
   draftLinePoints = [],
   draftPolygonPoints = [],
@@ -205,6 +224,13 @@ function MapCanvas({
   const isDrawMode = isPointMode || isLineMode || isPolygonMode
   const recentlyDraggedPointKeysRef = useRef(new Set())
   const [hoverLatLng, setHoverLatLng] = useState(null)
+  const layerPanesById = useMemo(
+    () =>
+      Object.fromEntries(
+        visibleLayerOrder.map((layerId) => [layerId, getLayerPaneName(layerId)]),
+      ),
+    [visibleLayerOrder],
+  )
 
   const createPointIcon = (style) => {
     const radius = Math.max(1, Number(style?.radius) || 7)
@@ -359,6 +385,7 @@ function MapCanvas({
         zoomControl={false}
         className="map-canvas"
       >
+        <MapLayerPanes orderedLayerIds={visibleLayerOrder} />
         <MapCursorHandler isDrawMode={isDrawMode} />
         <MapViewSync
           center={mapCenter}
@@ -395,6 +422,7 @@ function MapCanvas({
           <Polyline
             key={`${lineFeature.layerId}-${lineFeature.id}`}
             positions={lineFeature.latlngs}
+            pane={layerPanesById[lineFeature.layerId]}
             pathOptions={{
               color: lineFeature.style?.color || '#ea8b1f',
               weight:
@@ -441,6 +469,7 @@ function MapCanvas({
           <Fragment key={`${polygonFeature.layerId}-${polygonFeature.id}`}>
             <Polygon
               positions={polygonFeature.latlngs}
+              pane={layerPanesById[polygonFeature.layerId]}
               pathOptions={{
                 color: polygonFeature.style?.strokeColor || '#2f7de1',
                 stroke: (polygonFeature.style?.strokeWidth ?? 2) > 0,
@@ -456,6 +485,7 @@ function MapCanvas({
             {isSelectMode || isDeleteMode ? (
               <Polygon
                 positions={polygonFeature.latlngs}
+                pane={layerPanesById[polygonFeature.layerId]}
                 pathOptions={{
                   color: 'transparent',
                   weight: 10,
@@ -535,6 +565,7 @@ function MapCanvas({
             key={`${point.layerId}-${point.id}`}
             position={point.coordinates}
             icon={createPointIcon(point.style)}
+            pane={layerPanesById[point.layerId]}
             draggable={isSelectMode}
             eventHandlers={{
               click: (event) => handlePointClick(point, event),

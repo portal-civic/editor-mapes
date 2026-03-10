@@ -300,6 +300,19 @@ function App() {
         }),
     [layers],
   )
+  const visibleLayerOrder = useMemo(
+    () =>
+      layers
+        .filter(
+          (layer) =>
+            layer.visible &&
+            (layer.geometryType === 'point' ||
+              layer.geometryType === 'line' ||
+              layer.geometryType === 'polygon'),
+        )
+        .map((layer) => layer.id),
+    [layers],
+  )
 
   const handleWorkModeChange = (nextMode) => {
     setActiveWorkModeId(nextMode)
@@ -486,6 +499,36 @@ function App() {
         return { ...layer, style: nextStyle }
       }),
     )
+  }
+
+  const handleMoveLayerUp = (layerId) => {
+    setLayers((currentLayers) => {
+      const layerIndex = currentLayers.findIndex((layer) => layer.id === layerId)
+      if (layerIndex <= 0) {
+        return currentLayers
+      }
+
+      const nextLayers = [...currentLayers]
+      const layerToMove = nextLayers[layerIndex]
+      nextLayers[layerIndex] = nextLayers[layerIndex - 1]
+      nextLayers[layerIndex - 1] = layerToMove
+      return nextLayers
+    })
+  }
+
+  const handleMoveLayerDown = (layerId) => {
+    setLayers((currentLayers) => {
+      const layerIndex = currentLayers.findIndex((layer) => layer.id === layerId)
+      if (layerIndex < 0 || layerIndex >= currentLayers.length - 1) {
+        return currentLayers
+      }
+
+      const nextLayers = [...currentLayers]
+      const layerToMove = nextLayers[layerIndex]
+      nextLayers[layerIndex] = nextLayers[layerIndex + 1]
+      nextLayers[layerIndex + 1] = layerToMove
+      return nextLayers
+    })
   }
 
   const handleCreatePointLayer = () => {
@@ -943,6 +986,8 @@ function App() {
           onRenameLayer={handleRenameLayer}
           onDeleteLayer={handleDeleteLayer}
           onLayerStyleChange={handleLayerStyleChange}
+          onMoveLayerUp={handleMoveLayerUp}
+          onMoveLayerDown={handleMoveLayerDown}
         />
         <section className="map-workspace">
           <MapToolbarSimple
@@ -986,6 +1031,7 @@ function App() {
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
             polygonFeatures={visiblePolygonFeatures}
+            visibleLayerOrder={visibleLayerOrder}
             selectedMunicipalityGeometry={selectedMunicipalityGeometry}
             draftLinePoints={draftLinePoints}
             draftPolygonPoints={draftPolygonPoints}
