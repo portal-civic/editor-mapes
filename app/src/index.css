@@ -57,6 +57,59 @@ body {
   gap: 10px;
 }
 
+.topbar-search {
+  position: relative;
+  min-width: 280px;
+}
+
+.topbar-search input {
+  width: 100%;
+  border: 1px solid #c8d0db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #243244;
+  background: #f8fafc;
+}
+
+.topbar-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 700;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 34, 56, 0.14);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.topbar-search-results li {
+  margin: 0;
+}
+
+.topbar-search-results li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: #243244;
+}
+
+.topbar-search-results li button:hover {
+  background: #f1f5f9;
+}
+
 .topbar-field {
   display: inline-flex;
   align-items: center;

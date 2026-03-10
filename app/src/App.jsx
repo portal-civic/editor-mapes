@@ -160,6 +160,7 @@ function App() {
     center: DEFAULT_MAP_CENTER,
     zoom: DEFAULT_MAP_ZOOM,
   })
+  const [mapNavigationRequest, setMapNavigationRequest] = useState(null)
   const [activePointLayerId, setActivePointLayerId] = useState('punts')
   const [draftLinePoints, setDraftLinePoints] = useState([])
   const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
@@ -257,6 +258,28 @@ function App() {
 
       return { center, zoom }
     })
+  }
+
+  const handleMunicipalitySelect = ({ center, bounds, zoom = 12 }) => {
+    const requestId = `${Date.now()}-${Math.random()}`
+
+    if (Array.isArray(bounds) && bounds.length === 2) {
+      setMapNavigationRequest({
+        id: requestId,
+        type: 'fitBounds',
+        bounds,
+      })
+      return
+    }
+
+    if (Array.isArray(center) && center.length === 2) {
+      setMapNavigationRequest({
+        id: requestId,
+        type: 'setView',
+        center,
+        zoom,
+      })
+    }
   }
 
   const buildProjectData = () => ({
@@ -802,6 +825,7 @@ function App() {
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
+        onMunicipalitySelect={handleMunicipalitySelect}
         onOpenProject={handleOpenProjectClick}
         onExportProject={handleExportProject}
       />
@@ -860,6 +884,7 @@ function App() {
             activeWorkModeId={activeWorkModeId}
             mapCenter={mapView.center}
             mapZoom={mapView.zoom}
+            mapNavigationRequest={mapNavigationRequest}
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
             polygonFeatures={visiblePolygonFeatures}

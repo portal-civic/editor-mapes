@@ -113,7 +113,7 @@ function MapViewHandler({ onViewChange }) {
   return null
 }
 
-function MapViewSync({ center, zoom }) {
+function MapViewSync({ center, zoom, navigationRequest }) {
   const map = useMap()
 
   useEffect(() => {
@@ -131,6 +131,29 @@ function MapViewSync({ center, zoom }) {
     map.setView(center, zoom, { animate: false })
   }, [center, map, zoom])
 
+  useEffect(() => {
+    if (!navigationRequest || !navigationRequest.id) {
+      return
+    }
+
+    if (
+      navigationRequest.type === 'fitBounds' &&
+      Array.isArray(navigationRequest.bounds)
+    ) {
+      map.fitBounds(navigationRequest.bounds, { padding: [24, 24] })
+      return
+    }
+
+    if (
+      navigationRequest.type === 'setView' &&
+      Array.isArray(navigationRequest.center)
+    ) {
+      map.setView(navigationRequest.center, navigationRequest.zoom ?? 12, {
+        animate: false,
+      })
+    }
+  }, [map, navigationRequest])
+
   return null
 }
 
@@ -139,6 +162,7 @@ function MapCanvas({
   activeWorkModeId = 'select',
   mapCenter = DEFAULT_CENTER,
   mapZoom = DEFAULT_ZOOM,
+  mapNavigationRequest = null,
   pointFeatures = [],
   lineFeatures = [],
   polygonFeatures = [],
@@ -305,7 +329,11 @@ function MapCanvas({
         className="map-canvas"
       >
         <MapCursorHandler isDrawMode={isDrawMode} />
-        <MapViewSync center={mapCenter} zoom={mapZoom} />
+        <MapViewSync
+          center={mapCenter}
+          zoom={mapZoom}
+          navigationRequest={mapNavigationRequest}
+        />
         <MapViewHandler onViewChange={onViewChange} />
         <MapHoverHandler isDrawMode={isDrawMode} onHoverChange={setHoverLatLng} />
         <MapClickHandler
