@@ -230,6 +230,51 @@ function getFeatureLabel(properties) {
   return typeof rawLabel === 'string' ? rawLabel : ''
 }
 
+function toValidStyleNumber(value) {
+  const nextValue = Number(value)
+  return Number.isFinite(nextValue) ? nextValue : null
+}
+
+function toValidStyleText(value) {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const nextValue = value.trim()
+  return nextValue ? nextValue : null
+}
+
+function extractGeoJSONStyleHints(properties) {
+  if (!properties || typeof properties !== 'object') {
+    return { point: {}, line: {}, polygon: {} }
+  }
+
+  const stroke = toValidStyleText(properties.stroke)
+  const strokeWidth = toValidStyleNumber(properties['stroke-width'])
+  const strokeOpacity = toValidStyleNumber(properties['stroke-opacity'])
+  const fill = toValidStyleText(properties.fill)
+  const fillOpacity = toValidStyleNumber(properties['fill-opacity'])
+  const markerColor = toValidStyleText(properties['marker-color'])
+
+  return {
+    point: {
+      ...(markerColor ? { fillColor: markerColor, strokeColor: markerColor } : {}),
+    },
+    line: {
+      ...(stroke ? { color: stroke } : {}),
+      ...(strokeWidth !== null ? { width: strokeWidth } : {}),
+      ...(strokeOpacity !== null ? { opacity: strokeOpacity } : {}),
+    },
+    polygon: {
+      ...(stroke ? { strokeColor: stroke } : {}),
+      ...(strokeWidth !== null ? { strokeWidth } : {}),
+      ...(strokeOpacity !== null ? { strokeOpacity } : {}),
+      ...(fill ? { fillColor: fill } : {}),
+      ...(fillOpacity !== null ? { fillOpacity } : {}),
+    },
+  }
+}
+
 function normalizeGeoJSONInput(geojsonData) {
   if (!geojsonData || typeof geojsonData !== 'object') {
     return null
@@ -268,6 +313,9 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
   const points = []
   const lines = []
   const polygons = []
+  let pointStyleHint = null
+  let lineStyleHint = null
+  let polygonStyleHint = null
   const baseId = `${Date.now()}-${Math.round(Math.random() * 10000)}`
   const importName = fileName.replace(/\.(geo)?json$/i, '').trim() || 'GeoJSON'
 
@@ -335,15 +383,22 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
     }
 
     const label = getFeatureLabel(feature.properties)
+    const styleHints = extractGeoJSONStyleHints(feature.properties)
     const sourceId =
       feature.id != null && feature.id !== '' ? String(feature.id) : String(featureIndex + 1)
 
     if (geometry.type === 'Point') {
+      if (!pointStyleHint && Object.keys(styleHints.point).length > 0) {
+        pointStyleHint = styleHints.point
+      }
       pushPoint(geometry.coordinates, label, sourceId)
       return
     }
 
     if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
+      if (!pointStyleHint && Object.keys(styleHints.point).length > 0) {
+        pointStyleHint = styleHints.point
+      }
       geometry.coordinates.forEach((coordinates) => {
         pushPoint(coordinates, label, sourceId)
       })
@@ -351,11 +406,17 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
     }
 
     if (geometry.type === 'LineString') {
+      if (!lineStyleHint && Object.keys(styleHints.line).length > 0) {
+        lineStyleHint = styleHints.line
+      }
       pushLine(geometry.coordinates, label, sourceId)
       return
     }
 
     if (geometry.type === 'MultiLineString' && Array.isArray(geometry.coordinates)) {
+      if (!lineStyleHint && Object.keys(styleHints.line).length > 0) {
+        lineStyleHint = styleHints.line
+      }
       geometry.coordinates.forEach((lineCoordinates) => {
         pushLine(lineCoordinates, label, sourceId)
       })
@@ -363,11 +424,17 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
     }
 
     if (geometry.type === 'Polygon') {
+      if (!polygonStyleHint && Object.keys(styleHints.polygon).length > 0) {
+        polygonStyleHint = styleHints.polygon
+      }
       pushPolygon(geometry.coordinates, label, sourceId)
       return
     }
 
     if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+      if (!polygonStyleHint && Object.keys(styleHints.polygon).length > 0) {
+        polygonStyleHint = styleHints.polygon
+      }
       geometry.coordinates.forEach((polygonCoordinates) => {
         pushPolygon(polygonCoordinates, label, sourceId)
       })
@@ -384,7 +451,10 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
             geometryType: 'point',
             visible: true,
             legendLabel: `${importName} · punts`,
-            style: getDefaultLayerStyle('point', DEFAULT_LAYER_COLORS.point),
+            style: {
+              ...getDefaultLayerStyle('point', DEFAULT_LAYER_COLORS.point),
+              ...(pointStyleHint || {}),
+            },
             features: points,
           }
         : null,
@@ -397,7 +467,10 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
             geometryType: 'line',
             visible: true,
             legendLabel: `${importName} · línies`,
-            style: getDefaultLayerStyle('line', DEFAULT_LAYER_COLORS.line),
+            style: {
+              ...getDefaultLayerStyle('line', DEFAULT_LAYER_COLORS.line),
+              ...(lineStyleHint || {}),
+            },
             features: lines,
           }
         : null,
@@ -410,7 +483,10 @@ function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
             geometryType: 'polygon',
             visible: true,
             legendLabel: `${importName} · polígons`,
-            style: getDefaultLayerStyle('polygon', DEFAULT_LAYER_COLORS.polygon),
+            style: {
+              ...getDefaultLayerStyle('polygon', DEFAULT_LAYER_COLORS.polygon),
+              ...(polygonStyleHint || {}),
+            },
             features: polygons,
           }
         : null,
