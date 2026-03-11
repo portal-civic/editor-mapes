@@ -394,7 +394,6 @@ function MapCanvas({
         center={mapCenter}
         zoom={mapZoom}
         zoomControl={false}
-        preferCanvas
         className="map-canvas"
       >
         <MapInstanceBridge onMapReady={onMapReady} />
