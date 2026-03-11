@@ -886,17 +886,25 @@ function App() {
 
   const handleExportPNG = async () => {
     if (!mapInstanceRef.current) {
-      window.alert('No s’ha trobat el mapa per exportar')
+      window.alert("No s'ha trobat el mapa per exportar")
       return
     }
 
     try {
+      const visibleLayers = layers.filter(
+        (layer) =>
+          layer.visible &&
+          (layer.geometryType === 'point' ||
+            layer.geometryType === 'line' ||
+            layer.geometryType === 'polygon'),
+      )
       await exportMapAsPNG({
         map: mapInstanceRef.current,
         fileName: 'editor-mapes.png',
+        legendLayers: visibleLayers,
       })
     } catch {
-      window.alert('No s’ha pogut exportar la imatge PNG')
+      window.alert("No s'ha pogut exportar la imatge PNG")
     }
   }
 
@@ -977,7 +985,7 @@ function App() {
         setActiveWorkModeId('select')
       }
     } catch {
-      window.alert('No s’ha pogut llegir el fitxer de projecte')
+      window.alert("No s'ha pogut llegir el fitxer de projecte")
     } finally {
       event.target.value = ''
     }
@@ -1009,7 +1017,7 @@ function App() {
       ].filter(Boolean)
 
       if (nextLayersToAdd.length === 0) {
-        window.alert('No s’han trobat geometries compatibles en el GeoJSON')
+        window.alert("No s'han trobat geometries compatibles en el GeoJSON")
         return
       }
 
@@ -1025,7 +1033,7 @@ function App() {
         setActivePolygonLayerId(importedLayers.polygonLayer.id)
       }
     } catch {
-      window.alert('No s’ha pogut importar el fitxer GeoJSON')
+      window.alert("No s'ha pogut importar el fitxer GeoJSON")
     } finally {
       event.target.value = ''
     }
