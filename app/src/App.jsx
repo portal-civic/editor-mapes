@@ -9,7 +9,7 @@ import {
   mockLayers,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
-  normalizeLayerStyle,
+  getDefaultLayerStyle,
   ensureInitialPointLayer,
   getNextPointLayerName,
   getNextLineLayerName,
@@ -19,436 +19,15 @@ import {
   getPolygonLayerForNewFeature,
 } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
+import { buildProjectData, isValidProjectData, normalizeImportedLayers } from './modules/project'
+import {
+  buildImportedLayersFromGeoJSON,
+  convertLayerToGeoJSON,
+  sanitizeGeoJSONFileName,
+} from './modules/geojson'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
-}
-
-function toLatLng(coordinates) {
-  if (!Array.isArray(coordinates) || coordinates.length < 2) {
-    return null
-  }
-
-  const lng = Number(coordinates[0])
-  const lat = Number(coordinates[1])
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null
-  }
-
-  return [lat, lng]
-}
-
-function getFeatureLabel(properties) {
-  if (!properties || typeof properties !== 'object') {
-    return ''
-  }
-
-  const rawLabel = properties.label ?? properties.name ?? properties.title
-  return typeof rawLabel === 'string' ? rawLabel : ''
-}
-
-function toValidStyleNumber(value) {
-  const nextValue = Number(value)
-  return Number.isFinite(nextValue) ? nextValue : null
-}
-
-function toValidStyleText(value) {
-  if (typeof value !== 'string') {
-    return null
-  }
-
-  const nextValue = value.trim()
-  return nextValue ? nextValue : null
-}
-
-function extractGeoJSONStyleHints(properties) {
-  if (!properties || typeof properties !== 'object') {
-    return { point: {}, line: {}, polygon: {} }
-  }
-
-  const stroke = toValidStyleText(properties.stroke)
-  const strokeWidth = toValidStyleNumber(properties['stroke-width'])
-  const strokeOpacity = toValidStyleNumber(properties['stroke-opacity'])
-  const fill = toValidStyleText(properties.fill)
-  const fillOpacity = toValidStyleNumber(properties['fill-opacity'])
-  const markerColor = toValidStyleText(properties['marker-color'])
-
-  return {
-    point: {
-      ...(markerColor ? { fillColor: markerColor, strokeColor: markerColor } : {}),
-    },
-    line: {
-      ...(stroke ? { color: stroke } : {}),
-      ...(strokeWidth !== null ? { width: strokeWidth } : {}),
-      ...(strokeOpacity !== null ? { opacity: strokeOpacity } : {}),
-    },
-    polygon: {
-      ...(stroke ? { strokeColor: stroke } : {}),
-      ...(strokeWidth !== null ? { strokeWidth } : {}),
-      ...(strokeOpacity !== null ? { strokeOpacity } : {}),
-      ...(fill ? { fillColor: fill } : {}),
-      ...(fillOpacity !== null ? { fillOpacity } : {}),
-    },
-  }
-}
-
-function normalizeGeoJSONInput(geojsonData) {
-  if (!geojsonData || typeof geojsonData !== 'object') {
-    return null
-  }
-
-  if (geojsonData.type === 'FeatureCollection' && Array.isArray(geojsonData.features)) {
-    return geojsonData.features
-  }
-
-  if (geojsonData.type === 'Feature') {
-    return [geojsonData]
-  }
-
-  const validGeometryTypes = new Set([
-    'Point',
-    'MultiPoint',
-    'LineString',
-    'MultiLineString',
-    'Polygon',
-    'MultiPolygon',
-  ])
-
-  if (validGeometryTypes.has(geojsonData.type)) {
-    return [{ type: 'Feature', geometry: geojsonData, properties: {} }]
-  }
-
-  return null
-}
-
-function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
-  const normalizedFeatures = normalizeGeoJSONInput(geojsonData)
-  if (!normalizedFeatures) {
-    return null
-  }
-
-  const points = []
-  const lines = []
-  const polygons = []
-  let pointStyleHint = null
-  let lineStyleHint = null
-  let polygonStyleHint = null
-  const baseId = `${Date.now()}-${Math.round(Math.random() * 10000)}`
-  const importName = fileName.replace(/\.(geo)?json$/i, '').trim() || 'GeoJSON'
-
-  const pushPoint = (coordinates, label, sourceId) => {
-    const latlng = toLatLng(coordinates)
-    if (!latlng) {
-      return
-    }
-
-    points.push({
-      id: sourceId
-        ? `pt-import-${baseId}-${sourceId}-${points.length + 1}`
-        : `pt-import-${baseId}-${points.length + 1}`,
-      name: `Punt ${points.length + 1}`,
-      label,
-      coordinates: latlng,
-    })
-  }
-
-  const pushLine = (coordinates, label, sourceId) => {
-    if (!Array.isArray(coordinates)) {
-      return
-    }
-
-    const latlngs = coordinates.map(toLatLng).filter(Boolean)
-    if (latlngs.length < 2) {
-      return
-    }
-
-    lines.push({
-      id: sourceId
-        ? `ln-import-${baseId}-${sourceId}-${lines.length + 1}`
-        : `ln-import-${baseId}-${lines.length + 1}`,
-      label,
-      latlngs,
-    })
-  }
-
-  const pushPolygon = (coordinates, label, sourceId) => {
-    if (!Array.isArray(coordinates) || coordinates.length === 0) {
-      return
-    }
-
-    const rings = coordinates
-      .map((ring) => (Array.isArray(ring) ? ring.map(toLatLng).filter(Boolean) : null))
-      .filter((ring) => Array.isArray(ring) && ring.length >= 3)
-
-    if (rings.length === 0) {
-      return
-    }
-
-    polygons.push({
-      id: sourceId
-        ? `pg-import-${baseId}-${sourceId}-${polygons.length + 1}`
-        : `pg-import-${baseId}-${polygons.length + 1}`,
-      label,
-      latlngs: rings,
-    })
-  }
-
-  normalizedFeatures.forEach((feature, featureIndex) => {
-    const geometry = feature?.geometry
-    if (!geometry || typeof geometry !== 'object') {
-      return
-    }
-
-    const label = getFeatureLabel(feature.properties)
-    const styleHints = extractGeoJSONStyleHints(feature.properties)
-    const sourceId =
-      feature.id != null && feature.id !== '' ? String(feature.id) : String(featureIndex + 1)
-
-    if (geometry.type === 'Point') {
-      if (!pointStyleHint && Object.keys(styleHints.point).length > 0) {
-        pointStyleHint = styleHints.point
-      }
-      pushPoint(geometry.coordinates, label, sourceId)
-      return
-    }
-
-    if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
-      if (!pointStyleHint && Object.keys(styleHints.point).length > 0) {
-        pointStyleHint = styleHints.point
-      }
-      geometry.coordinates.forEach((coordinates) => {
-        pushPoint(coordinates, label, sourceId)
-      })
-      return
-    }
-
-    if (geometry.type === 'LineString') {
-      if (!lineStyleHint && Object.keys(styleHints.line).length > 0) {
-        lineStyleHint = styleHints.line
-      }
-      pushLine(geometry.coordinates, label, sourceId)
-      return
-    }
-
-    if (geometry.type === 'MultiLineString' && Array.isArray(geometry.coordinates)) {
-      if (!lineStyleHint && Object.keys(styleHints.line).length > 0) {
-        lineStyleHint = styleHints.line
-      }
-      geometry.coordinates.forEach((lineCoordinates) => {
-        pushLine(lineCoordinates, label, sourceId)
-      })
-      return
-    }
-
-    if (geometry.type === 'Polygon') {
-      if (!polygonStyleHint && Object.keys(styleHints.polygon).length > 0) {
-        polygonStyleHint = styleHints.polygon
-      }
-      pushPolygon(geometry.coordinates, label, sourceId)
-      return
-    }
-
-    if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
-      if (!polygonStyleHint && Object.keys(styleHints.polygon).length > 0) {
-        polygonStyleHint = styleHints.polygon
-      }
-      geometry.coordinates.forEach((polygonCoordinates) => {
-        pushPolygon(polygonCoordinates, label, sourceId)
-      })
-    }
-  })
-
-  return {
-    pointLayer:
-      points.length > 0
-        ? {
-            id: `point-import-${baseId}`,
-            name: `${importName} · punts`,
-            color: DEFAULT_LAYER_COLORS.point,
-            geometryType: 'point',
-            visible: true,
-            legendLabel: `${importName} · punts`,
-            style: {
-              ...getDefaultLayerStyle('point', DEFAULT_LAYER_COLORS.point),
-              ...(pointStyleHint || {}),
-            },
-            features: points,
-          }
-        : null,
-    lineLayer:
-      lines.length > 0
-        ? {
-            id: `line-import-${baseId}`,
-            name: `${importName} · línies`,
-            color: DEFAULT_LAYER_COLORS.line,
-            geometryType: 'line',
-            visible: true,
-            legendLabel: `${importName} · línies`,
-            style: {
-              ...getDefaultLayerStyle('line', DEFAULT_LAYER_COLORS.line),
-              ...(lineStyleHint || {}),
-            },
-            features: lines,
-          }
-        : null,
-    polygonLayer:
-      polygons.length > 0
-        ? {
-            id: `polygon-import-${baseId}`,
-            name: `${importName} · polígons`,
-            color: DEFAULT_LAYER_COLORS.polygon,
-            geometryType: 'polygon',
-            visible: true,
-            legendLabel: `${importName} · polígons`,
-            style: {
-              ...getDefaultLayerStyle('polygon', DEFAULT_LAYER_COLORS.polygon),
-              ...(polygonStyleHint || {}),
-            },
-            features: polygons,
-          }
-        : null,
-  }
-}
-
-function toGeoJSONCoordinate(latlng) {
-  if (!Array.isArray(latlng) || latlng.length < 2) {
-    return null
-  }
-
-  const lat = Number(latlng[0])
-  const lng = Number(latlng[1])
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null
-  }
-
-  return [lng, lat]
-}
-
-function closeGeoJSONRing(ring) {
-  if (!Array.isArray(ring) || ring.length < 3) {
-    return null
-  }
-
-  const first = ring[0]
-  const last = ring[ring.length - 1]
-  if (first[0] === last[0] && first[1] === last[1]) {
-    return ring
-  }
-
-  return [...ring, first]
-}
-
-function getPolygonGeoJSONCoordinates(latlngs) {
-  if (!Array.isArray(latlngs) || latlngs.length === 0) {
-    return null
-  }
-
-  const isSingleRing =
-    Array.isArray(latlngs[0]) &&
-    latlngs[0].length >= 2 &&
-    typeof latlngs[0][0] === 'number' &&
-    typeof latlngs[0][1] === 'number'
-
-  if (isSingleRing) {
-    const ring = latlngs.map(toGeoJSONCoordinate).filter(Boolean)
-    const closedRing = closeGeoJSONRing(ring)
-    return closedRing ? [closedRing] : null
-  }
-
-  const rings = latlngs
-    .map((ringLatlngs) =>
-      Array.isArray(ringLatlngs)
-        ? closeGeoJSONRing(ringLatlngs.map(toGeoJSONCoordinate).filter(Boolean))
-        : null,
-    )
-    .filter(Boolean)
-
-  return rings.length > 0 ? rings : null
-}
-
-function convertFeatureToGeoJSON(feature, layer) {
-  const baseProperties = {
-    label: typeof feature?.label === 'string' ? feature.label : '',
-    layerName: layer.name,
-    layerType: layer.geometryType,
-  }
-
-  if (layer.geometryType === 'point') {
-    const coordinates = toGeoJSONCoordinate(feature?.coordinates)
-    if (!coordinates) {
-      return null
-    }
-
-    return {
-      type: 'Feature',
-      id: feature?.id,
-      properties: baseProperties,
-      geometry: {
-        type: 'Point',
-        coordinates,
-      },
-    }
-  }
-
-  if (layer.geometryType === 'line') {
-    const coordinates = Array.isArray(feature?.latlngs)
-      ? feature.latlngs.map(toGeoJSONCoordinate).filter(Boolean)
-      : []
-
-    if (coordinates.length < 2) {
-      return null
-    }
-
-    return {
-      type: 'Feature',
-      id: feature?.id,
-      properties: baseProperties,
-      geometry: {
-        type: 'LineString',
-        coordinates,
-      },
-    }
-  }
-
-  if (layer.geometryType === 'polygon') {
-    const coordinates = getPolygonGeoJSONCoordinates(feature?.latlngs)
-    if (!coordinates) {
-      return null
-    }
-
-    return {
-      type: 'Feature',
-      id: feature?.id,
-      properties: baseProperties,
-      geometry: {
-        type: 'Polygon',
-        coordinates,
-      },
-    }
-  }
-
-  return null
-}
-
-function convertLayerToGeoJSON(layer) {
-  const layerFeatures = Array.isArray(layer?.features) ? layer.features : []
-
-  return {
-    type: 'FeatureCollection',
-    features: layerFeatures
-      .map((feature) => convertFeatureToGeoJSON(feature, layer))
-      .filter(Boolean),
-  }
-}
-
-function sanitizeGeoJSONFileName(name) {
-  const safeName = String(name || 'layer')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-_]/g, '')
-
-  return safeName || 'layer'
 }
 
 function App() {
@@ -619,10 +198,8 @@ function App() {
     }
   }
 
-  const buildProjectData = () => ({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    project: {
+  const handleExportProject = () => {
+    const projectData = buildProjectData({
       mapView,
       selectedBasemapId,
       activeWorkModeId,
@@ -630,11 +207,7 @@ function App() {
       activeLineLayerId,
       activePolygonLayerId,
       layers,
-    },
-  })
-
-  const handleExportProject = () => {
-    const projectData = buildProjectData()
+    })
     const jsonContent = JSON.stringify(projectData, null, 2)
     const blob = new Blob([jsonContent], { type: 'application/json' })
     const downloadUrl = URL.createObjectURL(blob)
@@ -748,24 +321,14 @@ function App() {
       const fileContent = await selectedFile.text()
       const parsedData = JSON.parse(fileContent)
 
-      if (
-        !parsedData ||
-        typeof parsedData !== 'object' ||
-        !parsedData.project ||
-        typeof parsedData.project !== 'object' ||
-        !Array.isArray(parsedData.project.layers)
-      ) {
+      if (!isValidProjectData(parsedData)) {
         window.alert('Fitxer de projecte no vàlid')
         return
       }
 
       const importedProject = parsedData.project
-      const normalizedLayers = importedProject.layers.map((layer) => ({
-        ...normalizeLayerStyle(layer),
-        features: Array.isArray(layer.features) ? layer.features : [],
-      }))
 
-      setLayers(ensureInitialPointLayer(normalizedLayers))
+      setLayers(normalizeImportedLayers(importedProject.layers))
       setActivePointLayerId(importedProject.activePointLayerId ?? null)
       setActiveLineLayerId(importedProject.activeLineLayerId ?? null)
       setActivePolygonLayerId(importedProject.activePolygonLayerId ?? null)
