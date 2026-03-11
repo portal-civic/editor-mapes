@@ -10,6 +10,7 @@ function TopBar({
   onMunicipalitySelect,
   onOpenProject,
   onImportGeoJSON,
+  onExportVisibleGeoJSON,
   onExportProject,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -219,6 +220,9 @@ function TopBar({
         </button>
         <button type="button" onClick={onImportGeoJSON}>
           Importar GeoJSON
+        </button>
+        <button type="button" onClick={onExportVisibleGeoJSON}>
+          Exportar visible a GeoJSON
         </button>
         <button type="button" className="primary" onClick={onExportProject}>
           Exportar projecte

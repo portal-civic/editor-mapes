@@ -855,6 +855,32 @@ function App() {
     URL.revokeObjectURL(downloadUrl)
   }
 
+  const handleExportVisibleGeoJSON = () => {
+    const visibleVectorLayers = layers.filter(
+      (layer) =>
+        layer.visible &&
+        (layer.geometryType === 'point' ||
+          layer.geometryType === 'line' ||
+          layer.geometryType === 'polygon'),
+    )
+
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features: visibleVectorLayers.flatMap((layer) => convertLayerToGeoJSON(layer).features),
+    }
+
+    const geojsonContent = JSON.stringify(geojsonData, null, 2)
+    const blob = new Blob([geojsonContent], { type: 'application/geo+json' })
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = 'editor-mapes-visible.geojson'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+  }
+
   const handleOpenProjectClick = () => {
     importInputRef.current?.click()
   }
@@ -1482,6 +1508,7 @@ function App() {
         onMunicipalitySelect={handleMunicipalitySelect}
         onOpenProject={handleOpenProjectClick}
         onImportGeoJSON={handleImportGeoJSONClick}
+        onExportVisibleGeoJSON={handleExportVisibleGeoJSON}
         onExportProject={handleExportProject}
       />
 
