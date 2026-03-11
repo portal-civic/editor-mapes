@@ -1,2 +1,5 @@
 export * from './layersService'
 export * from './mockLayers'
+export * from './defaults'
+export * from './styles'
+export * from './helpers'

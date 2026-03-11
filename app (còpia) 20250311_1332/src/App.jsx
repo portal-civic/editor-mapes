@@ -5,20 +5,204 @@ import MapCanvas from './components/MapCanvas'
 import LegendPanel from './components/LegendPanel'
 import MapToolbarSimple from './components/MapToolbarSimple'
 import useMapExport from './hooks/useMapExport'
-import {
-  mockLayers,
-  DEFAULT_MAP_CENTER,
-  DEFAULT_MAP_ZOOM,
-  normalizeLayerStyle,
-  ensureInitialPointLayer,
-  getNextPointLayerName,
-  getNextLineLayerName,
-  getNextPolygonLayerName,
-  getPointLayerForNewPoint,
-  getLineLayerForNewFeature,
-  getPolygonLayerForNewFeature,
-} from './modules/layers'
+import { mockLayers } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
+
+const DEFAULT_MAP_CENTER = [40.4168, -3.7038]
+const DEFAULT_MAP_ZOOM = 6
+const DEFAULT_LAYER_COLORS = {
+  point: '#d4335b',
+  line: '#ea8b1f',
+  polygon: '#2f7de1',
+}
+const INITIAL_POINT_FEATURES = [
+  { id: 'pt-madrid', name: 'Madrid', label: '', coordinates: [40.4168, -3.7038] },
+  { id: 'pt-valencia', name: 'València', label: '', coordinates: [39.4699, -0.3763] },
+  { id: 'pt-zaragoza', name: 'Saragossa', label: '', coordinates: [41.6488, -0.8891] },
+]
+
+function getDefaultLayerStyle(geometryType, layerColor) {
+  const fallbackColor = DEFAULT_LAYER_COLORS[geometryType] || '#0f4c81'
+  const color = layerColor || fallbackColor
+
+  if (geometryType === 'point') {
+    return {
+      radius: 7,
+      fillColor: color,
+      fillOpacity: 0.9,
+      strokeColor: color,
+      strokeWidth: 2,
+      strokeOpacity: 1,
+    }
+  }
+
+  if (geometryType === 'line') {
+    return {
+      color,
+      width: 3,
+      opacity: 1,
+      dashStyle: 'solid',
+    }
+  }
+
+  if (geometryType === 'polygon') {
+    return {
+      strokeColor: color,
+      strokeWidth: 2,
+      strokeOpacity: 1,
+      dashStyle: 'solid',
+      fillColor: color,
+      fillOpacity: 0.18,
+    }
+  }
+
+  return {}
+}
+
+function normalizeLayerStyle(layer) {
+  const defaults = getDefaultLayerStyle(layer.geometryType, layer.color)
+  const currentStyle =
+    layer.style && typeof layer.style === 'object' ? layer.style : {}
+
+  return {
+    ...layer,
+    style: {
+      ...defaults,
+      ...currentStyle,
+    },
+  }
+}
+
+function ensureInitialPointLayer(layers) {
+  const hasDefaultPointLayer = layers.some((layer) => layer.id === 'punts')
+  if (hasDefaultPointLayer) {
+    return layers.map(normalizeLayerStyle)
+  }
+
+  const firstPointLayer = layers.find((layer) => layer.geometryType === 'point')
+  if (firstPointLayer) {
+    const existingFeatures = Array.isArray(firstPointLayer.features)
+      ? firstPointLayer.features
+      : []
+
+    return layers
+      .map((layer) =>
+        layer.id === firstPointLayer.id
+          ? {
+              ...layer,
+              id: 'punts',
+              name: 'Punts',
+              color: layer.color || '#d4335b',
+              geometryType: 'point',
+              visible: true,
+              legendLabel: 'Punts',
+              features:
+                existingFeatures.length > 0
+                  ? existingFeatures
+                  : INITIAL_POINT_FEATURES,
+            }
+          : layer,
+      )
+      .map(normalizeLayerStyle)
+  }
+
+  return [
+    ...layers,
+    {
+      id: 'punts',
+      name: 'Punts',
+      color: '#d4335b',
+      geometryType: 'point',
+      visible: true,
+      legendLabel: 'Punts',
+      features: INITIAL_POINT_FEATURES,
+    },
+  ].map(normalizeLayerStyle)
+}
+
+function getNextPointLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nova capa (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nova capa ${nextIndex}`
+}
+
+function getNextLineLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nova línia (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nova línia ${nextIndex}`
+}
+
+function getNextPolygonLayerName(layers) {
+  const existingIndices = layers
+    .map((layer) => {
+      const match = /^Nou polígon (\d+)$/.exec(layer.name)
+      return match ? Number(match[1]) : null
+    })
+    .filter((value) => Number.isInteger(value))
+
+  const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1
+  return `Nou polígon ${nextIndex}`
+}
+
+function getPointLayerForNewPoint(layers, activePointLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activePointLayerId && layer.geometryType === 'point',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visiblePointLayers = layers.filter(
+    (layer) => layer.geometryType === 'point' && layer.visible,
+  )
+
+  return visiblePointLayers[visiblePointLayers.length - 1] || null
+}
+
+function getLineLayerForNewFeature(layers, activeLineLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activeLineLayerId && layer.geometryType === 'line',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visibleLineLayers = layers.filter(
+    (layer) => layer.geometryType === 'line' && layer.visible,
+  )
+
+  return visibleLineLayers[visibleLineLayers.length - 1] || null
+}
+
+function getPolygonLayerForNewFeature(layers, activePolygonLayerId) {
+  const activeLayer = layers.find(
+    (layer) => layer.id === activePolygonLayerId && layer.geometryType === 'polygon',
+  )
+
+  if (activeLayer) {
+    return activeLayer
+  }
+
+  const visiblePolygonLayers = layers.filter(
+    (layer) => layer.geometryType === 'polygon' && layer.visible,
+  )
+
+  return visiblePolygonLayers[visiblePolygonLayers.length - 1] || null
+}
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
