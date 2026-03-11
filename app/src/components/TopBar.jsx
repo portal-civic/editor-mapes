@@ -18,6 +18,8 @@ function TopBar({
   const [suggestions, setSuggestions] = useState([])
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [exportTitle, setExportTitle] = useState('')
+  const [showLegend, setShowLegend] = useState(true)
 
   const canSearch = searchQuery.trim().length >= SEARCH_MIN_CHARS
 
@@ -225,9 +227,30 @@ function TopBar({
         <button type="button" onClick={onExportVisibleGeoJSON}>
           Exportar visible a GeoJSON
         </button>
-        <button type="button" onClick={onExportPNG}>
-          Exportar PNG
-        </button>
+        <div className="topbar-export-options">
+          <input
+            type="text"
+            className="topbar-export-title"
+            placeholder="Títol del PNG..."
+            value={exportTitle}
+            onChange={(event) => setExportTitle(event.target.value)}
+            maxLength={120}
+          />
+          <label className="topbar-export-legend-toggle">
+            <input
+              type="checkbox"
+              checked={showLegend}
+              onChange={(event) => setShowLegend(event.target.checked)}
+            />
+            Llegenda
+          </label>
+          <button
+            type="button"
+            onClick={() => onExportPNG({ title: exportTitle, showLegend })}
+          >
+            Exportar PNG
+          </button>
+        </div>
         <button type="button" className="primary" onClick={onExportProject}>
           Exportar projecte
         </button>

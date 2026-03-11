@@ -884,7 +884,7 @@ function App() {
     URL.revokeObjectURL(downloadUrl)
   }
 
-  const handleExportPNG = async () => {
+  const handleExportPNG = async ({ title = '', showLegend = true } = {}) => {
     if (!mapInstanceRef.current) {
       window.alert("No s'ha trobat el mapa per exportar")
       return
@@ -902,6 +902,8 @@ function App() {
         map: mapInstanceRef.current,
         fileName: 'editor-mapes.png',
         legendLayers: visibleLayers,
+        title,
+        showLegend,
       })
     } catch {
       window.alert("No s'ha pogut exportar la imatge PNG")
