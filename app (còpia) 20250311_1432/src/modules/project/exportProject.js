@@ -2,7 +2,9 @@ export function buildProjectData({
   mapView,
   selectedBasemapId,
   activeWorkModeId,
-  editableLayerId,
+  activePointLayerId,
+  activeLineLayerId,
+  activePolygonLayerId,
   layers,
 }) {
   return {
@@ -12,7 +14,9 @@ export function buildProjectData({
       mapView,
       selectedBasemapId,
       activeWorkModeId,
-      editableLayerId,
+      activePointLayerId,
+      activeLineLayerId,
+      activePolygonLayerId,
       layers,
     },
   }

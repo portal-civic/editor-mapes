@@ -2,8 +2,12 @@ import { useState } from 'react'
 
 function LayersPanel({
   layers = [],
-  editableLayerId,
-  onSetEditableLayer,
+  activePointLayerId,
+  activeLineLayerId,
+  activePolygonLayerId,
+  onSetActivePointLayer,
+  onSetActiveLineLayer,
+  onSetActivePolygonLayer,
   onLayerVisibilityChange,
   onCreatePointLayer,
   onCreateLineLayer,
@@ -38,8 +42,12 @@ function LayersPanel({
           const isPointLayer = layer.geometryType === 'point'
           const isLineLayer = layer.geometryType === 'line'
           const isPolygonLayer = layer.geometryType === 'polygon'
-          const isVectorLayer = isPointLayer || isLineLayer || isPolygonLayer
-          const isEditable = layer.id === editableLayerId
+          const isActivePointLayer = isPointLayer && layer.id === activePointLayerId
+          const isActiveLineLayer = isLineLayer && layer.id === activeLineLayerId
+          const isActivePolygonLayer =
+            isPolygonLayer && layer.id === activePolygonLayerId
+          const isActiveVectorLayer =
+            isActivePointLayer || isActiveLineLayer || isActivePolygonLayer
           const isStyleOpen = openStyleLayerId === layer.id
           const layerStyle = layer.style || {}
           const swatchColor = isPointLayer
@@ -53,7 +61,7 @@ function LayersPanel({
           return (
             <article
               key={layer.id}
-              className={`layer-item ${isEditable ? 'layer-item-active' : ''}`}
+              className={`layer-item ${isActiveVectorLayer ? 'layer-item-active' : ''}`}
             >
               <div className="layer-item-main">
                 <span
@@ -66,16 +74,26 @@ function LayersPanel({
               <p className="layer-meta">
                 {layer.geometryType} · {layer.visible ? 'visible' : 'oculta'}
               </p>
-              {isVectorLayer ? (
+              {isPointLayer || isLineLayer || isPolygonLayer ? (
                 <>
-                  {isEditable ? (
-                    <p className="layer-active-indicator">En edició ✏️</p>
+                  {isActiveVectorLayer ? (
+                    <p className="layer-active-indicator">Activa</p>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onSetEditableLayer?.(layer.id)}
+                      onClick={() => {
+                        if (isPointLayer) {
+                          onSetActivePointLayer?.(layer.id)
+                          return
+                        }
+                        if (isLineLayer) {
+                          onSetActiveLineLayer?.(layer.id)
+                          return
+                        }
+                        onSetActivePolygonLayer?.(layer.id)
+                      }}
                     >
-                      Editar
+                      Activar
                     </button>
                   )}
                   <button type="button" onClick={() => onRenameLayer?.(layer.id)}>
@@ -116,7 +134,7 @@ function LayersPanel({
                   </button>
                 </>
               ) : null}
-              {isStyleOpen && isVectorLayer ? (
+              {isStyleOpen && (isPointLayer || isLineLayer || isPolygonLayer) ? (
                 <div className="layer-style-editor">
                   {isPointLayer ? (
                     <>

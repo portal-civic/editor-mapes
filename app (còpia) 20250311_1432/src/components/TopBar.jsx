@@ -13,7 +13,6 @@ function TopBar({
   onExportVisibleGeoJSON,
   onExportPNG,
   onExportProject,
-  onExportWebProject,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -254,9 +253,6 @@ function TopBar({
         </div>
         <button type="button" className="primary" onClick={onExportProject}>
           Exportar projecte
-        </button>
-        <button type="button" onClick={onExportWebProject}>
-          Exportar projecte web
         </button>
       </div>
     </header>

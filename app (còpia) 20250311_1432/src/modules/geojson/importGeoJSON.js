@@ -1,4 +1,4 @@
-import { DEFAULT_LAYER_COLORS, getDefaultLayerStyle, normalizeFeature } from '../layers'
+import { DEFAULT_LAYER_COLORS, getDefaultLayerStyle } from '../layers'
 import { extractGeoJSONStyleHints } from './styleHints'
 
 function toLatLng(coordinates) {
@@ -15,31 +15,13 @@ function toLatLng(coordinates) {
   return [lat, lng]
 }
 
-function extractFeatureProps(properties) {
+function getFeatureLabel(properties) {
   if (!properties || typeof properties !== 'object') {
-    return {}
+    return ''
   }
 
-  const label =
-    typeof properties.label === 'string'
-      ? properties.label
-      : typeof properties.name === 'string'
-        ? properties.name
-        : typeof properties.title === 'string'
-          ? properties.title
-          : ''
-
-  return {
-    name: typeof properties.name === 'string' ? properties.name : '',
-    label,
-    description: typeof properties.description === 'string' ? properties.description : '',
-    category: typeof properties.category === 'string' ? properties.category : '',
-    subcategory: typeof properties.subcategory === 'string' ? properties.subcategory : '',
-    status: typeof properties.status === 'string' ? properties.status : '',
-    icon: typeof properties.icon === 'string' ? properties.icon : '',
-    showInWeb: properties.showInWeb !== false,
-    showInExport: properties.showInExport !== false,
-  }
+  const rawLabel = properties.label ?? properties.name ?? properties.title
+  return typeof rawLabel === 'string' ? rawLabel : ''
 }
 
 export function normalizeGeoJSONInput(geojsonData) {
@@ -86,27 +68,23 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
   const baseId = `${Date.now()}-${Math.round(Math.random() * 10000)}`
   const importName = fileName.replace(/\.(geo)?json$/i, '').trim() || 'GeoJSON'
 
-  const pushPoint = (coordinates, props, sourceId) => {
+  const pushPoint = (coordinates, label, sourceId) => {
     const latlng = toLatLng(coordinates)
     if (!latlng) {
       return
     }
 
-    const rawFeature = {
+    points.push({
       id: sourceId
         ? `pt-import-${baseId}-${sourceId}-${points.length + 1}`
         : `pt-import-${baseId}-${points.length + 1}`,
-      name: props.name || `Punt ${points.length + 1}`,
-      ...props,
+      name: `Punt ${points.length + 1}`,
+      label,
       coordinates: latlng,
-    }
-    const feature = normalizeFeature(rawFeature)
-    if (feature) {
-      points.push(feature)
-    }
+    })
   }
 
-  const pushLine = (coordinates, props, sourceId) => {
+  const pushLine = (coordinates, label, sourceId) => {
     if (!Array.isArray(coordinates)) {
       return
     }
@@ -116,21 +94,16 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       return
     }
 
-    const rawFeature = {
+    lines.push({
       id: sourceId
         ? `ln-import-${baseId}-${sourceId}-${lines.length + 1}`
         : `ln-import-${baseId}-${lines.length + 1}`,
-      name: props.name || '',
-      ...props,
+      label,
       latlngs,
-    }
-    const feature = normalizeFeature(rawFeature)
-    if (feature) {
-      lines.push(feature)
-    }
+    })
   }
 
-  const pushPolygon = (coordinates, props, sourceId) => {
+  const pushPolygon = (coordinates, label, sourceId) => {
     if (!Array.isArray(coordinates) || coordinates.length === 0) {
       return
     }
@@ -143,18 +116,13 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       return
     }
 
-    const rawFeature = {
+    polygons.push({
       id: sourceId
         ? `pg-import-${baseId}-${sourceId}-${polygons.length + 1}`
         : `pg-import-${baseId}-${polygons.length + 1}`,
-      name: props.name || '',
-      ...props,
+      label,
       latlngs: rings,
-    }
-    const feature = normalizeFeature(rawFeature)
-    if (feature) {
-      polygons.push(feature)
-    }
+    })
   }
 
   normalizedFeatures.forEach((feature, featureIndex) => {
@@ -163,7 +131,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       return
     }
 
-    const props = extractFeatureProps(feature.properties)
+    const label = getFeatureLabel(feature.properties)
     const styleHints = extractGeoJSONStyleHints(feature.properties)
     const sourceId =
       feature.id != null && feature.id !== '' ? String(feature.id) : String(featureIndex + 1)
@@ -172,7 +140,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       if (!pointStyleHint && Object.keys(styleHints.point).length > 0) {
         pointStyleHint = styleHints.point
       }
-      pushPoint(geometry.coordinates, props, sourceId)
+      pushPoint(geometry.coordinates, label, sourceId)
       return
     }
 
@@ -181,7 +149,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
         pointStyleHint = styleHints.point
       }
       geometry.coordinates.forEach((coordinates) => {
-        pushPoint(coordinates, props, sourceId)
+        pushPoint(coordinates, label, sourceId)
       })
       return
     }
@@ -190,7 +158,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       if (!lineStyleHint && Object.keys(styleHints.line).length > 0) {
         lineStyleHint = styleHints.line
       }
-      pushLine(geometry.coordinates, props, sourceId)
+      pushLine(geometry.coordinates, label, sourceId)
       return
     }
 
@@ -199,7 +167,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
         lineStyleHint = styleHints.line
       }
       geometry.coordinates.forEach((lineCoordinates) => {
-        pushLine(lineCoordinates, props, sourceId)
+        pushLine(lineCoordinates, label, sourceId)
       })
       return
     }
@@ -208,7 +176,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
       if (!polygonStyleHint && Object.keys(styleHints.polygon).length > 0) {
         polygonStyleHint = styleHints.polygon
       }
-      pushPolygon(geometry.coordinates, props, sourceId)
+      pushPolygon(geometry.coordinates, label, sourceId)
       return
     }
 
@@ -217,7 +185,7 @@ export function buildImportedLayersFromGeoJSON(geojsonData, fileName) {
         polygonStyleHint = styleHints.polygon
       }
       geometry.coordinates.forEach((polygonCoordinates) => {
-        pushPolygon(polygonCoordinates, props, sourceId)
+        pushPolygon(polygonCoordinates, label, sourceId)
       })
     }
   })

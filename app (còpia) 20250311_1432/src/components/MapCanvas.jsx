@@ -188,21 +188,11 @@ function MapLayerPanes({ orderedLayerIds }) {
   const map = useMap()
 
   useEffect(() => {
-    // User layer panes sit BELOW Leaflet's markerPane (600) and above overlayPane (400).
-    // This is critical: canvas elements in user layer panes must not sit above the
-    // markerPane because canvas blocks all pointer events, even when interactive:false.
-    // Markers are DOM elements in markerPane (600) and are always reachable.
     orderedLayerIds.forEach((layerId, index) => {
       const paneName = getLayerPaneName(layerId)
       const pane = map.getPane(paneName) || map.createPane(paneName)
-      pane.style.zIndex = String(420 + (orderedLayerIds.length - index))
+      pane.style.zIndex = String(700 + (orderedLayerIds.length - index))
     })
-
-    // interaction-pane uses SVG renderer (pointer-events:none on <svg> container,
-    // only individual <path> elements capture events). Placed above markerPane so
-    // line/polygon hit targets are reachable, but Marker clicks pass through the SVG.
-    const interactionPane = map.getPane('interaction-pane') || map.createPane('interaction-pane')
-    interactionPane.style.zIndex = '610'
   }, [map, orderedLayerIds])
 
   return null
@@ -221,14 +211,14 @@ function MapCanvas({
   selectedMunicipalityGeometry = null,
   draftLinePoints = [],
   draftPolygonPoints = [],
-  editableLayerId = null,
-  selectedFeature = null,
   onPointAdd,
   onPointDelete,
   onPointMove,
-  onFeatureSelect,
+  onPointUpdateLabel,
   onLineDelete,
+  onLineUpdateLabel,
   onPolygonDelete,
+  onPolygonUpdateLabel,
   onDraftLinePointAdd,
   onDraftPolygonPointAdd,
   onViewChange,
@@ -244,14 +234,6 @@ function MapCanvas({
   const isDeleteMode = activeWorkModeId === 'delete'
   const isDrawMode = isPointMode || isLineMode || isPolygonMode
   const recentlyDraggedPointKeysRef = useRef(new Set())
-  // SVG renderer for interaction overlays: unlike canvas, SVG pointer-events are
-  // per-path, so clicks on empty space pass through to Markers beneath.
-  const interactionSvgRenderer = useMemo(() => L.svg({ pane: 'interaction-pane' }), [])
-
-  const isSelectedFeature = (feat) =>
-    selectedFeature != null &&
-    feat.layerId === selectedFeature.layerId &&
-    feat.id === selectedFeature.featureId
   const [hoverLatLng, setHoverLatLng] = useState(null)
   const layerPanesById = useMemo(
     () =>
@@ -291,10 +273,6 @@ function MapCanvas({
       return
     }
 
-    if (point.layerId !== editableLayerId) {
-      return
-    }
-
     const pointKey = `${point.layerId}-${point.id}`
     if (recentlyDraggedPointKeysRef.current.has(pointKey)) {
       return
@@ -303,7 +281,18 @@ function MapCanvas({
     event.originalEvent?.stopPropagation()
 
     if (isSelectMode) {
-      onFeatureSelect?.({ layerId: point.layerId, featureId: point.id, geometryType: 'point' })
+      const currentLabel = typeof point.label === 'string' ? point.label : ''
+      const nextLabelInput = window.prompt('Text del punt:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onPointUpdateLabel?.({
+        layerId: point.layerId,
+        pointId: point.id,
+        label: nextLabel,
+      })
       return
     }
 
@@ -341,7 +330,18 @@ function MapCanvas({
     event.originalEvent?.stopPropagation()
 
     if (isSelectMode) {
-      onFeatureSelect?.({ layerId: lineFeature.layerId, featureId: lineFeature.id, geometryType: 'line' })
+      const currentLabel = typeof lineFeature.label === 'string' ? lineFeature.label : ''
+      const nextLabelInput = window.prompt('Text de la línia:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onLineUpdateLabel?.({
+        layerId: lineFeature.layerId,
+        lineId: lineFeature.id,
+        label: nextLabel,
+      })
       return
     }
 
@@ -361,7 +361,19 @@ function MapCanvas({
     event.originalEvent?.stopPropagation()
 
     if (isSelectMode) {
-      onFeatureSelect?.({ layerId: polygonFeature.layerId, featureId: polygonFeature.id, geometryType: 'polygon' })
+      const currentLabel =
+        typeof polygonFeature.label === 'string' ? polygonFeature.label : ''
+      const nextLabelInput = window.prompt('Text del polígon:', currentLabel)
+      if (nextLabelInput === null) {
+        return
+      }
+
+      const nextLabel = nextLabelInput.trim() === '' ? '' : nextLabelInput
+      onPolygonUpdateLabel?.({
+        layerId: polygonFeature.layerId,
+        polygonId: polygonFeature.id,
+        label: nextLabel,
+      })
       return
     }
 
@@ -424,56 +436,37 @@ function MapCanvas({
           />
         ) : null}
 
-        {lineFeatures.map((lineFeature) => {
-          const isSelected = isSelectedFeature(lineFeature)
-          const lineLabel = lineFeature.label?.trim() || lineFeature.name?.trim() || ''
-          return (
-            <Fragment key={`${lineFeature.layerId}-${lineFeature.id}`}>
+        {lineFeatures.map((lineFeature) => (
+          <Fragment key={`${lineFeature.layerId}-${lineFeature.id}`}>
+            <Polyline
+              positions={lineFeature.latlngs}
+              pane={layerPanesById[lineFeature.layerId]}
+              pathOptions={{
+                color: lineFeature.style?.color || '#ea8b1f',
+                weight: lineFeature.style?.width || 3,
+                opacity: lineFeature.style?.opacity ?? 1,
+                dashArray: getDashArray(lineFeature.style?.dashStyle),
+              }}
+              interactive={false}
+            />
+            {isSelectMode || isDeleteMode ? (
               <Polyline
                 positions={lineFeature.latlngs}
                 pane={layerPanesById[lineFeature.layerId]}
                 pathOptions={{
-                  color: lineFeature.style?.color || '#ea8b1f',
-                  weight: lineFeature.style?.width || 3,
-                  opacity: lineFeature.style?.opacity ?? 1,
-                  dashArray: getDashArray(lineFeature.style?.dashStyle),
+                  color: 'transparent',
+                  weight: Math.max((lineFeature.style?.width || 3) + 4, 7),
+                  opacity: 0,
                 }}
-                interactive={false}
+                interactive
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: (event) => handleLineClick(lineFeature, event),
+                }}
               />
-              {isSelected ? (
-                <Polyline
-                  positions={lineFeature.latlngs}
-                  pane={layerPanesById[lineFeature.layerId]}
-                  pathOptions={{
-                    color: '#0f4c81',
-                    weight: (lineFeature.style?.width || 3) + 6,
-                    opacity: 0.35,
-                    dashArray: undefined,
-                  }}
-                  interactive={false}
-                />
-              ) : null}
-              {(isSelectMode || isDeleteMode) && lineFeature.layerId === editableLayerId ? (
-                <Polyline
-                  positions={lineFeature.latlngs}
-                  renderer={interactionSvgRenderer}
-                  pathOptions={{
-                    color: 'transparent',
-                    weight: Math.max((lineFeature.style?.width || 3) + 4, 7),
-                    opacity: 0,
-                  }}
-                  interactive
-                  bubblingMouseEvents={false}
-                  eventHandlers={{
-                    click: (event) => handleLineClick(lineFeature, event),
-                  }}
-                >
-                  {lineLabel ? <Tooltip sticky>{lineLabel}</Tooltip> : null}
-                </Polyline>
-              ) : null}
-            </Fragment>
-          )
-        })}
+            ) : null}
+          </Fragment>
+        ))}
 
         {isLineMode && draftLinePoints.length > 0 ? (
           <Polyline
@@ -500,62 +493,43 @@ function MapCanvas({
           />
         ) : null}
 
-        {polygonFeatures.map((polygonFeature) => {
-          const isSelected = isSelectedFeature(polygonFeature)
-          const polygonLabel = polygonFeature.label?.trim() || polygonFeature.name?.trim() || ''
-          return (
-            <Fragment key={`${polygonFeature.layerId}-${polygonFeature.id}`}>
+        {polygonFeatures.map((polygonFeature) => (
+          <Fragment key={`${polygonFeature.layerId}-${polygonFeature.id}`}>
+            <Polygon
+              positions={polygonFeature.latlngs}
+              pane={layerPanesById[polygonFeature.layerId]}
+              pathOptions={{
+                color: polygonFeature.style?.strokeColor || '#2f7de1',
+                stroke: (polygonFeature.style?.strokeWidth ?? 2) > 0,
+                weight: polygonFeature.style?.strokeWidth ?? 2,
+                opacity: polygonFeature.style?.strokeOpacity ?? 1,
+                dashArray: getDashArray(polygonFeature.style?.dashStyle),
+                fillColor: polygonFeature.style?.fillColor || '#2f7de1',
+                fill: true,
+                fillOpacity: polygonFeature.style?.fillOpacity ?? 0.18,
+              }}
+              interactive={false}
+            />
+            {isSelectMode || isDeleteMode ? (
               <Polygon
                 positions={polygonFeature.latlngs}
                 pane={layerPanesById[polygonFeature.layerId]}
                 pathOptions={{
-                  color: polygonFeature.style?.strokeColor || '#2f7de1',
-                  stroke: (polygonFeature.style?.strokeWidth ?? 2) > 0,
-                  weight: polygonFeature.style?.strokeWidth ?? 2,
-                  opacity: polygonFeature.style?.strokeOpacity ?? 1,
-                  dashArray: getDashArray(polygonFeature.style?.dashStyle),
-                  fillColor: polygonFeature.style?.fillColor || '#2f7de1',
+                  color: 'transparent',
+                  weight: 10,
+                  fillColor: '#000000',
                   fill: true,
-                  fillOpacity: polygonFeature.style?.fillOpacity ?? 0.18,
+                  fillOpacity: 0.01,
                 }}
-                interactive={false}
+                interactive
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: (event) => handlePolygonClick(polygonFeature, event),
+                }}
               />
-              {isSelected ? (
-                <Polygon
-                  positions={polygonFeature.latlngs}
-                  pane={layerPanesById[polygonFeature.layerId]}
-                  pathOptions={{
-                    color: '#0f4c81',
-                    weight: 4,
-                    opacity: 0.8,
-                    fill: false,
-                  }}
-                  interactive={false}
-                />
-              ) : null}
-              {(isSelectMode || isDeleteMode) && polygonFeature.layerId === editableLayerId ? (
-                <Polygon
-                  positions={polygonFeature.latlngs}
-                  renderer={interactionSvgRenderer}
-                  pathOptions={{
-                    color: 'transparent',
-                    weight: 10,
-                    fillColor: '#000000',
-                    fill: true,
-                    fillOpacity: 0.01,
-                  }}
-                  interactive
-                  bubblingMouseEvents={false}
-                  eventHandlers={{
-                    click: (event) => handlePolygonClick(polygonFeature, event),
-                  }}
-                >
-                  {polygonLabel ? <Tooltip sticky>{polygonLabel}</Tooltip> : null}
-                </Polygon>
-              ) : null}
-            </Fragment>
-          )
-        })}
+            ) : null}
+          </Fragment>
+        ))}
 
         {isPolygonMode && draftPolygonPoints.length > 0 ? (
           <>
@@ -614,44 +588,23 @@ function MapCanvas({
           />
         ) : null}
 
-        {pointFeatures.map((point) => {
-          const isSelected = isSelectedFeature(point)
-          const radius = Math.max(1, Number(point.style?.radius) || 7)
-          const pointTooltip = point.label?.trim() || ''
-          return (
-            <Fragment key={`${point.layerId}-${point.id}`}>
-              {isSelected ? (
-                <CircleMarker
-                  center={point.coordinates}
-                  radius={radius + 7}
-                  pane={layerPanesById[point.layerId]}
-                  pathOptions={{
-                    color: '#0f4c81',
-                    weight: 3,
-                    opacity: 0.8,
-                    fill: false,
-                  }}
-                  interactive={false}
-                />
-              ) : null}
-              <Marker
-                position={point.coordinates}
-                icon={createPointIcon(point.style)}
-                pane={layerPanesById[point.layerId]}
-                interactive={(isSelectMode || isDeleteMode) ? point.layerId === editableLayerId : true}
-                draggable={isSelectMode && point.layerId === editableLayerId}
-                eventHandlers={{
-                  click: (event) => handlePointClick(point, event),
-                  dragend: (event) => handlePointDragEnd(point, event),
-                }}
-              >
-                {pointTooltip && point.layerId === editableLayerId ? (
-                  <Tooltip permanent={false}>{pointTooltip}</Tooltip>
-                ) : null}
-              </Marker>
-            </Fragment>
-          )
-        })}
+        {pointFeatures.map((point) => (
+          <Marker
+            key={`${point.layerId}-${point.id}`}
+            position={point.coordinates}
+            icon={createPointIcon(point.style)}
+            pane={layerPanesById[point.layerId]}
+            draggable={isSelectMode}
+            eventHandlers={{
+              click: (event) => handlePointClick(point, event),
+              dragend: (event) => handlePointDragEnd(point, event),
+            }}
+          >
+            {typeof point.label === 'string' && point.label.trim() ? (
+              <Tooltip>{point.label}</Tooltip>
+            ) : null}
+          </Marker>
+        ))}
       </MapContainer>
     </section>
   )

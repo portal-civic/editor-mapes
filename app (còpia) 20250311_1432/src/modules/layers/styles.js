@@ -1,4 +1,4 @@
-import { DEFAULT_LAYER_COLORS, DEFAULT_LAYER_FIELDS } from './defaults'
+import { DEFAULT_LAYER_COLORS } from './defaults'
 
 export function getDefaultLayerStyle(geometryType, layerColor) {
   const fallbackColor = DEFAULT_LAYER_COLORS[geometryType] || '#0f4c81'
@@ -44,7 +44,6 @@ export function normalizeLayerStyle(layer) {
     layer.style && typeof layer.style === 'object' ? layer.style : {}
 
   return {
-    ...DEFAULT_LAYER_FIELDS,
     ...layer,
     style: {
       ...defaults,

@@ -56,15 +56,7 @@ function getPolygonGeoJSONCoordinates(latlngs) {
 
 export function convertFeatureToGeoJSON(feature, layer) {
   const baseProperties = {
-    name: typeof feature?.name === 'string' ? feature.name : '',
     label: typeof feature?.label === 'string' ? feature.label : '',
-    description: typeof feature?.description === 'string' ? feature.description : '',
-    category: typeof feature?.category === 'string' ? feature.category : '',
-    subcategory: typeof feature?.subcategory === 'string' ? feature.subcategory : '',
-    status: typeof feature?.status === 'string' ? feature.status : '',
-    icon: typeof feature?.icon === 'string' ? feature.icon : '',
-    showInWeb: feature?.showInWeb !== false,
-    showInExport: feature?.showInExport !== false,
     layerName: layer.name,
     layerType: layer.geometryType,
   }

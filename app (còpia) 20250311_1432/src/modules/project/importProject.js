@@ -1,4 +1,4 @@
-import { normalizeLayerStyle, ensureInitialPointLayer, normalizeFeature } from '../layers'
+import { normalizeLayerStyle, ensureInitialPointLayer } from '../layers'
 
 export function isValidProjectData(parsedData) {
   return (
@@ -13,9 +13,7 @@ export function isValidProjectData(parsedData) {
 export function normalizeImportedLayers(layers) {
   const normalized = layers.map((layer) => ({
     ...normalizeLayerStyle(layer),
-    features: Array.isArray(layer.features)
-      ? layer.features.map(normalizeFeature).filter(Boolean)
-      : [],
+    features: Array.isArray(layer.features) ? layer.features : [],
   }))
   return ensureInitialPointLayer(normalized)
 }

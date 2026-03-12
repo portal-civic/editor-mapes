@@ -4,27 +4,22 @@ import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
 import LegendPanel from './components/LegendPanel'
 import MapToolbarSimple from './components/MapToolbarSimple'
-import FeatureInspector from './components/FeatureInspector'
 import useMapExport from './hooks/useMapExport'
 import {
   mockLayers,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
-  DEFAULT_LAYER_FIELDS,
   getDefaultLayerStyle,
   ensureInitialPointLayer,
   getNextPointLayerName,
   getNextLineLayerName,
   getNextPolygonLayerName,
-  normalizeFeature,
+  getPointLayerForNewPoint,
+  getLineLayerForNewFeature,
+  getPolygonLayerForNewFeature,
 } from './modules/layers'
 import { basemapOptions, defaultBasemapId } from './modules/maps'
-import {
-  buildProjectData,
-  isValidProjectData,
-  normalizeImportedLayers,
-  downloadWebProject,
-} from './modules/project'
+import { buildProjectData, isValidProjectData, normalizeImportedLayers } from './modules/project'
 import {
   buildImportedLayersFromGeoJSON,
   convertLayerToGeoJSON,
@@ -57,10 +52,21 @@ function App() {
   const [mapNavigationRequest, setMapNavigationRequest] = useState(null)
   const [selectedMunicipalityGeometry, setSelectedMunicipalityGeometry] =
     useState(null)
-  const [editableLayerId, setEditableLayerId] = useState('punts')
+  const [activePointLayerId, setActivePointLayerId] = useState('punts')
   const [draftLinePoints, setDraftLinePoints] = useState([])
   const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
-  const [selectedFeature, setSelectedFeature] = useState(null)
+  const [activeLineLayerId, setActiveLineLayerId] = useState(() => {
+    const initialLineLayer = ensureInitialPointLayer(mockLayers).find(
+      (layer) => layer.geometryType === 'line',
+    )
+    return initialLineLayer?.id || null
+  })
+  const [activePolygonLayerId, setActivePolygonLayerId] = useState(() => {
+    const initialPolygonLayer = ensureInitialPointLayer(mockLayers).find(
+      (layer) => layer.geometryType === 'polygon',
+    )
+    return initialPolygonLayer?.id || null
+  })
 
   const selectedBasemap = useMemo(
     () =>
@@ -134,41 +140,8 @@ function App() {
     [layers],
   )
 
-  const selectedFeatureData = useMemo(() => {
-    if (!selectedFeature) return null
-    const layer = layers.find((l) => l.id === selectedFeature.layerId)
-    if (!layer) return null
-    const features = Array.isArray(layer.features) ? layer.features : []
-    const feature = features.find((f) => f.id === selectedFeature.featureId)
-    if (!feature) return null
-    return { feature, layer }
-  }, [selectedFeature, layers])
-
-  const handleFeatureSelect = ({ layerId, featureId, geometryType }) => {
-    setSelectedFeature({ layerId, featureId, geometryType })
-  }
-
-  const handleFeatureDeselect = () => {
-    setSelectedFeature(null)
-  }
-
-  const handleFeatureUpdate = (layerId, featureId, partialData) => {
-    setLayers((currentLayers) =>
-      currentLayers.map((layer) => {
-        if (layer.id !== layerId) return layer
-        return {
-          ...layer,
-          features: Array.isArray(layer.features)
-            ? layer.features.map((f) => (f.id === featureId ? { ...f, ...partialData } : f))
-            : [],
-        }
-      }),
-    )
-  }
-
   const handleWorkModeChange = (nextMode) => {
     setActiveWorkModeId(nextMode)
-    setSelectedFeature(null)
     if (nextMode !== 'line') {
       setDraftLinePoints([])
     }
@@ -230,7 +203,9 @@ function App() {
       mapView,
       selectedBasemapId,
       activeWorkModeId,
-      editableLayerId,
+      activePointLayerId,
+      activeLineLayerId,
+      activePolygonLayerId,
       layers,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
@@ -324,10 +299,6 @@ function App() {
     }
   }
 
-  const handleExportWebProject = () => {
-    downloadWebProject({ mapView, selectedBasemapId, layers })
-  }
-
   const handleMapReady = (map) => {
     mapInstanceRef.current = map
   }
@@ -358,15 +329,9 @@ function App() {
       const importedProject = parsedData.project
 
       setLayers(normalizeImportedLayers(importedProject.layers))
-      // Support new format (editableLayerId) and old format (activePointLayerId etc.)
-      setEditableLayerId(
-        importedProject.editableLayerId ??
-        importedProject.activePointLayerId ??
-        importedProject.activeLineLayerId ??
-        importedProject.activePolygonLayerId ??
-        null,
-      )
-      setSelectedFeature(null)
+      setActivePointLayerId(importedProject.activePointLayerId ?? null)
+      setActiveLineLayerId(importedProject.activeLineLayerId ?? null)
+      setActivePolygonLayerId(importedProject.activePolygonLayerId ?? null)
       setDraftLinePoints([])
       setDraftPolygonPoints([])
 
@@ -439,10 +404,14 @@ function App() {
 
       setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, ...nextLayersToAdd]))
 
-      // Set the first imported layer as editable
-      const firstImported = importedLayers.pointLayer || importedLayers.lineLayer || importedLayers.polygonLayer
-      if (firstImported) {
-        setEditableLayerId(firstImported.id)
+      if (importedLayers.pointLayer) {
+        setActivePointLayerId(importedLayers.pointLayer.id)
+      }
+      if (importedLayers.lineLayer) {
+        setActiveLineLayerId(importedLayers.lineLayer.id)
+      }
+      if (importedLayers.polygonLayer) {
+        setActivePolygonLayerId(importedLayers.polygonLayer.id)
       }
     } catch {
       window.alert("No s'ha pogut importar el fitxer GeoJSON")
@@ -509,14 +478,13 @@ function App() {
 
   const handleCreatePointLayer = () => {
     const nextLayerId = `point-${Date.now()}-${Math.round(Math.random() * 10000)}`
-    setEditableLayerId(nextLayerId)
+    setActivePointLayerId(nextLayerId)
     setLayers((currentLayers) => {
       const nextLayerName = getNextPointLayerName(currentLayers)
 
       return [
         ...currentLayers,
         {
-          ...DEFAULT_LAYER_FIELDS,
           id: nextLayerId,
           name: nextLayerName,
           color: '#d4335b',
@@ -532,14 +500,13 @@ function App() {
 
   const handleCreateLineLayer = () => {
     const nextLayerId = `line-${Date.now()}-${Math.round(Math.random() * 10000)}`
-    setEditableLayerId(nextLayerId)
+    setActiveLineLayerId(nextLayerId)
     setLayers((currentLayers) => {
       const nextLayerName = getNextLineLayerName(currentLayers)
 
       return [
         ...currentLayers,
         {
-          ...DEFAULT_LAYER_FIELDS,
           id: nextLayerId,
           name: nextLayerName,
           color: '#ea8b1f',
@@ -555,14 +522,13 @@ function App() {
 
   const handleCreatePolygonLayer = () => {
     const nextLayerId = `polygon-${Date.now()}-${Math.round(Math.random() * 10000)}`
-    setEditableLayerId(nextLayerId)
+    setActivePolygonLayerId(nextLayerId)
     setLayers((currentLayers) => {
       const nextLayerName = getNextPolygonLayerName(currentLayers)
 
       return [
         ...currentLayers,
         {
-          ...DEFAULT_LAYER_FIELDS,
           id: nextLayerId,
           name: nextLayerName,
           color: '#2f7de1',
@@ -577,29 +543,39 @@ function App() {
   }
 
   const handleMapPointAdd = (coordinates) => {
-    const editableLayer = layers.find((l) => l.id === editableLayerId)
-    if (!editableLayer || editableLayer.geometryType !== 'point') {
-      window.alert('La capa en edició no és de tipus punt')
-      return
-    }
+    const nextLabelInput = window.prompt('Text del punt:', '')
+    const nextLabel =
+      nextLabelInput === null || nextLabelInput.trim() === '' ? '' : nextLabelInput
 
-    const currentFeatures = Array.isArray(editableLayer.features) ? editableLayer.features : []
-    const newFeature = normalizeFeature({
-      id: `pt-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      name: `Punt ${currentFeatures.length + 1}`,
-      label: '',
-      coordinates,
+    setLayers((currentLayers) => {
+      const targetLayer = getPointLayerForNewPoint(currentLayers, activePointLayerId)
+
+      if (!targetLayer) {
+        return currentLayers
+      }
+
+      return currentLayers.map((layer) => {
+        if (layer.id !== targetLayer.id) {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        const pointIndex = currentFeatures.length + 1
+
+        return {
+          ...layer,
+          features: [
+            ...currentFeatures,
+            {
+              id: `pt-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              name: `Punt ${pointIndex}`,
+              label: nextLabel,
+              coordinates,
+            },
+          ],
+        }
+      })
     })
-    if (!newFeature) return
-
-    setLayers((currentLayers) =>
-      currentLayers.map((layer) => {
-        if (layer.id !== editableLayerId) return layer
-        const feats = Array.isArray(layer.features) ? layer.features : []
-        return { ...layer, features: [...feats, newFeature] }
-      }),
-    )
-    setSelectedFeature({ layerId: editableLayerId, featureId: newFeature.id, geometryType: 'point' })
   }
 
   const handleMapPointDelete = ({ layerId, pointId }) => {
@@ -636,6 +612,24 @@ function App() {
     )
   }
 
+  const handleMapPointUpdateLabel = ({ layerId, pointId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'point') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === pointId ? { ...feature, label } : feature,
+          ),
+        }
+      }),
+    )
+  }
+
   const handleMapLineDelete = ({ layerId, lineId }) => {
     setLayers((currentLayers) =>
       currentLayers.map((layer) => {
@@ -647,6 +641,24 @@ function App() {
         return {
           ...layer,
           features: currentFeatures.filter((feature) => feature.id !== lineId),
+        }
+      }),
+    )
+  }
+
+  const handleMapLineUpdateLabel = ({ layerId, lineId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'line') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === lineId ? { ...feature, label } : feature,
+          ),
         }
       }),
     )
@@ -668,12 +680,32 @@ function App() {
     )
   }
 
+  const handleMapPolygonUpdateLabel = ({ layerId, polygonId, label }) => {
+    setLayers((currentLayers) =>
+      currentLayers.map((layer) => {
+        if (layer.id !== layerId || layer.geometryType !== 'polygon') {
+          return layer
+        }
+
+        const currentFeatures = Array.isArray(layer.features) ? layer.features : []
+        return {
+          ...layer,
+          features: currentFeatures.map((feature) =>
+            feature.id === polygonId ? { ...feature, label } : feature,
+          ),
+        }
+      }),
+    )
+  }
+
   const handleDraftLinePointAdd = (coordinates) => {
-    const editableLayer = layers.find((l) => l.id === editableLayerId)
-    if (!editableLayer || editableLayer.geometryType !== 'line') {
-      window.alert('La capa en edició no és de tipus línia')
+    const targetLineLayer = getLineLayerForNewFeature(layers, activeLineLayerId)
+
+    if (!targetLineLayer) {
+      window.alert('Cal una capa de línia activa')
       return
     }
+
     setDraftLinePoints((currentPoints) => [...currentPoints, coordinates])
   }
 
@@ -686,28 +718,28 @@ function App() {
       return
     }
 
-    const editableLayer = layers.find((l) => l.id === editableLayerId)
-    if (!editableLayer || editableLayer.geometryType !== 'line') {
-      window.alert('La capa en edició no és de tipus línia')
+    const targetLineLayer = getLineLayerForNewFeature(layers, activeLineLayerId)
+    if (!targetLineLayer) {
+      window.alert('Cal una capa de línia activa')
       return
     }
 
     setLayers((currentLayers) =>
       currentLayers.map((layer) => {
-        if (layer.id !== editableLayerId || layer.geometryType !== 'line') {
+        if (layer.id !== targetLineLayer.id || layer.geometryType !== 'line') {
           return layer
         }
 
         const currentFeatures = Array.isArray(layer.features) ? layer.features : []
-        const newFeature = normalizeFeature({
-          id: `ln-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-          name: '',
-          latlngs: [...draftLinePoints],
-        })
-        if (!newFeature) return layer
         return {
           ...layer,
-          features: [...currentFeatures, newFeature],
+          features: [
+            ...currentFeatures,
+            {
+              id: `ln-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              latlngs: [...draftLinePoints],
+            },
+          ],
         }
       }),
     )
@@ -716,11 +748,16 @@ function App() {
   }
 
   const handleDraftPolygonPointAdd = (coordinates) => {
-    const editableLayer = layers.find((l) => l.id === editableLayerId)
-    if (!editableLayer || editableLayer.geometryType !== 'polygon') {
-      window.alert('La capa en edició no és de tipus polígon')
+    const targetPolygonLayer = getPolygonLayerForNewFeature(
+      layers,
+      activePolygonLayerId,
+    )
+
+    if (!targetPolygonLayer) {
+      window.alert('Cal una capa de polígon activa')
       return
     }
+
     setDraftPolygonPoints((currentPoints) => [...currentPoints, coordinates])
   }
 
@@ -733,28 +770,31 @@ function App() {
       return
     }
 
-    const editableLayer = layers.find((l) => l.id === editableLayerId)
-    if (!editableLayer || editableLayer.geometryType !== 'polygon') {
-      window.alert('La capa en edició no és de tipus polígon')
+    const targetPolygonLayer = getPolygonLayerForNewFeature(
+      layers,
+      activePolygonLayerId,
+    )
+    if (!targetPolygonLayer) {
+      window.alert('Cal una capa de polígon activa')
       return
     }
 
     setLayers((currentLayers) =>
       currentLayers.map((layer) => {
-        if (layer.id !== editableLayerId || layer.geometryType !== 'polygon') {
+        if (layer.id !== targetPolygonLayer.id || layer.geometryType !== 'polygon') {
           return layer
         }
 
         const currentFeatures = Array.isArray(layer.features) ? layer.features : []
-        const newFeature = normalizeFeature({
-          id: `pg-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-          name: '',
-          latlngs: [...draftPolygonPoints],
-        })
-        if (!newFeature) return layer
         return {
           ...layer,
-          features: [...currentFeatures, newFeature],
+          features: [
+            ...currentFeatures,
+            {
+              id: `pg-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+              latlngs: [...draftPolygonPoints],
+            },
+          ],
         }
       }),
     )
@@ -826,14 +866,31 @@ function App() {
 
       const nextLayers = currentLayers.filter((layer) => layer.id !== layerId)
 
-      if (editableLayerId === layerId) {
-        const remainingVectorLayers = nextLayers.filter((layer) =>
-          layer.geometryType === 'point' ||
-          layer.geometryType === 'line' ||
-          layer.geometryType === 'polygon',
+      if (activePointLayerId === layerId) {
+        const remainingPointLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'point',
         )
-        const nextEditableId = remainingVectorLayers[remainingVectorLayers.length - 1]?.id || null
-        setEditableLayerId(nextEditableId)
+        const nextActivePointLayer =
+          remainingPointLayers[remainingPointLayers.length - 1]?.id || null
+        setActivePointLayerId(nextActivePointLayer)
+      }
+
+      if (activeLineLayerId === layerId) {
+        const remainingLineLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'line',
+        )
+        const nextActiveLineLayer =
+          remainingLineLayers[remainingLineLayers.length - 1]?.id || null
+        setActiveLineLayerId(nextActiveLineLayer)
+      }
+
+      if (activePolygonLayerId === layerId) {
+        const remainingPolygonLayers = nextLayers.filter(
+          (layer) => layer.geometryType === 'polygon',
+        )
+        const nextActivePolygonLayer =
+          remainingPolygonLayers[remainingPolygonLayers.length - 1]?.id || null
+        setActivePolygonLayerId(nextActivePolygonLayer)
       }
 
       return nextLayers
@@ -866,14 +923,17 @@ function App() {
         onExportVisibleGeoJSON={handleExportVisibleGeoJSON}
         onExportPNG={handleExportPNG}
         onExportProject={handleExportProject}
-        onExportWebProject={handleExportWebProject}
       />
 
       <main className="workspace">
         <LayersPanel
           layers={layers}
-          editableLayerId={editableLayerId}
-          onSetEditableLayer={setEditableLayerId}
+          activePointLayerId={activePointLayerId}
+          activeLineLayerId={activeLineLayerId}
+          activePolygonLayerId={activePolygonLayerId}
+          onSetActivePointLayer={setActivePointLayerId}
+          onSetActiveLineLayer={setActiveLineLayerId}
+          onSetActivePolygonLayer={setActivePolygonLayerId}
           onLayerVisibilityChange={handleLayerVisibilityChange}
           onCreatePointLayer={handleCreatePointLayer}
           onCreateLineLayer={handleCreateLineLayer}
@@ -931,31 +991,21 @@ function App() {
             selectedMunicipalityGeometry={selectedMunicipalityGeometry}
             draftLinePoints={draftLinePoints}
             draftPolygonPoints={draftPolygonPoints}
-            editableLayerId={editableLayerId}
-            selectedFeature={selectedFeature}
             onPointAdd={handleMapPointAdd}
             onPointDelete={handleMapPointDelete}
             onPointMove={handleMapPointMove}
-            onFeatureSelect={handleFeatureSelect}
+            onPointUpdateLabel={handleMapPointUpdateLabel}
             onLineDelete={handleMapLineDelete}
+            onLineUpdateLabel={handleMapLineUpdateLabel}
             onPolygonDelete={handleMapPolygonDelete}
+            onPolygonUpdateLabel={handleMapPolygonUpdateLabel}
             onDraftLinePointAdd={handleDraftLinePointAdd}
             onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
             onViewChange={handleMapViewChange}
             onMapReady={handleMapReady}
           />
         </section>
-        {selectedFeatureData ? (
-          <FeatureInspector
-            key={`${selectedFeatureData.layer.id}-${selectedFeatureData.feature.id}`}
-            feature={selectedFeatureData.feature}
-            layer={selectedFeatureData.layer}
-            onUpdate={handleFeatureUpdate}
-            onClose={handleFeatureDeselect}
-          />
-        ) : (
-          <LegendPanel layers={layers} />
-        )}
+        <LegendPanel layers={layers} />
       </main>
     </div>
   )
