@@ -202,7 +202,7 @@ function MapLayerPanes({ orderedLayerIds }) {
     // only individual <path> elements capture events). Placed above markerPane so
     // line/polygon hit targets are reachable, but Marker clicks pass through the SVG.
     const interactionPane = map.getPane('interaction-pane') || map.createPane('interaction-pane')
-    interactionPane.style.zIndex = '610'
+    interactionPane.style.zIndex = '620'
   }, [map, orderedLayerIds])
 
   return null
@@ -261,9 +261,8 @@ function MapCanvas({
     [visibleLayerOrder],
   )
 
-  const createPointIcon = (style) => {
+  const createPointIcon = (style, isSelected = false) => {
     const radius = Math.max(1, Number(style?.radius) || 7)
-    const diameter = radius * 2
     const fillColor = style?.fillColor || '#d4335b'
     const fillOpacity =
       Number.isFinite(Number(style?.fillOpacity)) ? Number(style.fillOpacity) : 0.9
@@ -275,18 +274,29 @@ function MapCanvas({
         ? Number(style.strokeOpacity)
         : 1
 
+    // Always reserve space for selection ring (radius+8 padding each side)
+    // so icon size stays stable when selection state changes.
+    const pad = 9
+    const size = (radius + pad) * 2
+    const cx = radius + pad
+    const cy = radius + pad
+    const selectionRing = isSelected
+      ? `<circle cx="${cx}" cy="${cy}" r="${radius + 6}" fill="none" stroke="#0f4c81" stroke-width="3" stroke-opacity="0.85" />`
+      : ''
+
     return L.divIcon({
       className: '',
-      html: `<svg width="${diameter}" height="${diameter}" viewBox="0 0 ${diameter} ${diameter}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${Math.max(
-        radius - strokeWidth / 2,
-        0,
-      )}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" /></svg>`,
-      iconSize: [diameter, diameter],
-      iconAnchor: [radius, radius],
+      html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">${selectionRing}<circle cx="${cx}" cy="${cy}" r="${Math.max(radius - strokeWidth / 2, 0)}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" /></svg>`,
+      iconSize: [size, size],
+      iconAnchor: [cx, cy],
     })
   }
 
   const handlePointClick = (point, event) => {
+    // Always absorb the click on an interactive marker so it never bubbles to
+    // the map's MapClickHandler (which would add a new point in create mode).
+    event.originalEvent?.stopPropagation()
+
     if (!isSelectMode && !isDeleteMode) {
       return
     }
@@ -299,8 +309,6 @@ function MapCanvas({
     if (recentlyDraggedPointKeysRef.current.has(pointKey)) {
       return
     }
-
-    event.originalEvent?.stopPropagation()
 
     if (isSelectMode) {
       onFeatureSelect?.({ layerId: point.layerId, featureId: point.id, geometryType: 'point' })
@@ -615,37 +623,27 @@ function MapCanvas({
         ) : null}
 
         {pointFeatures.map((point) => {
+          const isEditable = point.layerId === editableLayerId
           const isSelected = isSelectedFeature(point)
-          const radius = Math.max(1, Number(point.style?.radius) || 7)
           const pointTooltip = point.label?.trim() || ''
+          // Editable layer Markers live in interaction-pane (620) — above all visual
+          // layer canvases (420-450). Non-editable Markers stay in their user pane,
+          // purely visual and non-interactive.
+          const markerPane = isEditable ? 'interaction-pane' : layerPanesById[point.layerId]
           return (
             <Fragment key={`${point.layerId}-${point.id}`}>
-              {isSelected ? (
-                <CircleMarker
-                  center={point.coordinates}
-                  radius={radius + 7}
-                  pane={layerPanesById[point.layerId]}
-                  pathOptions={{
-                    color: '#0f4c81',
-                    weight: 3,
-                    opacity: 0.8,
-                    fill: false,
-                  }}
-                  interactive={false}
-                />
-              ) : null}
               <Marker
                 position={point.coordinates}
-                icon={createPointIcon(point.style)}
-                pane={layerPanesById[point.layerId]}
-                interactive={(isSelectMode || isDeleteMode) ? point.layerId === editableLayerId : true}
-                draggable={isSelectMode && point.layerId === editableLayerId}
+                icon={createPointIcon(point.style, isSelected)}
+                pane={markerPane}
+                interactive={isEditable}
+                draggable={isEditable && isSelectMode}
                 eventHandlers={{
                   click: (event) => handlePointClick(point, event),
                   dragend: (event) => handlePointDragEnd(point, event),
                 }}
               >
-                {pointTooltip && point.layerId === editableLayerId ? (
+                {pointTooltip && isEditable ? (
                   <Tooltip permanent={false}>{pointTooltip}</Tooltip>
                 ) : null}
               </Marker>

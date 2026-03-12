@@ -507,9 +507,23 @@ function App() {
     })
   }
 
+  const isCreateMode = (mode) =>
+    mode === 'point' || mode === 'line' || mode === 'polygon'
+
+  const handleSetEditableLayer = (layerId) => {
+    setEditableLayerId(layerId)
+    if (isCreateMode(activeWorkModeId)) {
+      const nextLayer = layers.find((l) => l.id === layerId)
+      if (nextLayer?.geometryType) {
+        handleWorkModeChange(nextLayer.geometryType)
+      }
+    }
+  }
+
   const handleCreatePointLayer = () => {
     const nextLayerId = `point-${Date.now()}-${Math.round(Math.random() * 10000)}`
     setEditableLayerId(nextLayerId)
+    handleWorkModeChange('point')
     setLayers((currentLayers) => {
       const nextLayerName = getNextPointLayerName(currentLayers)
 
@@ -533,6 +547,7 @@ function App() {
   const handleCreateLineLayer = () => {
     const nextLayerId = `line-${Date.now()}-${Math.round(Math.random() * 10000)}`
     setEditableLayerId(nextLayerId)
+    handleWorkModeChange('line')
     setLayers((currentLayers) => {
       const nextLayerName = getNextLineLayerName(currentLayers)
 
@@ -556,6 +571,7 @@ function App() {
   const handleCreatePolygonLayer = () => {
     const nextLayerId = `polygon-${Date.now()}-${Math.round(Math.random() * 10000)}`
     setEditableLayerId(nextLayerId)
+    handleWorkModeChange('polygon')
     setLayers((currentLayers) => {
       const nextLayerName = getNextPolygonLayerName(currentLayers)
 
@@ -762,28 +778,9 @@ function App() {
     setDraftPolygonPoints([])
   }
 
-  const handleRenameLayer = (layerId) => {
-    const layerToRename = layers.find(
-      (layer) =>
-        layer.id === layerId &&
-        (layer.geometryType === 'point' ||
-          layer.geometryType === 'line' ||
-          layer.geometryType === 'polygon'),
-    )
-
-    if (!layerToRename) {
-      return
-    }
-
-    const nextName = window.prompt('Nou nom de la capa', layerToRename.name)
-    if (nextName === null) {
-      return
-    }
-
-    const trimmedName = nextName.trim()
-    if (!trimmedName) {
-      return
-    }
+  const handleRenameLayer = (layerId, newName) => {
+    const trimmedName = typeof newName === 'string' ? newName.trim() : ''
+    if (!trimmedName) return
 
     setLayers((currentLayers) =>
       currentLayers.map((layer) =>
@@ -873,7 +870,7 @@ function App() {
         <LayersPanel
           layers={layers}
           editableLayerId={editableLayerId}
-          onSetEditableLayer={setEditableLayerId}
+          onSetEditableLayer={handleSetEditableLayer}
           onLayerVisibilityChange={handleLayerVisibilityChange}
           onCreatePointLayer={handleCreatePointLayer}
           onCreateLineLayer={handleCreateLineLayer}
@@ -888,6 +885,7 @@ function App() {
         <section className="map-workspace">
           <MapToolbarSimple
             activeWorkModeId={activeWorkModeId}
+            editableLayerGeometryType={layers.find((l) => l.id === editableLayerId)?.geometryType ?? null}
             onModeChange={handleWorkModeChange}
           />
           {activeWorkModeId === 'line' && draftLinePoints.length > 0 ? (

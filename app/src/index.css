@@ -215,68 +215,217 @@ button.primary {
   background: #f9fbfd;
 }
 
-.layer-item {
-  margin: 0;
-  padding: 10px;
-  border: 1px solid #e3e8ef;
-  border-radius: 8px;
-  background: #f9fbfd;
+/* ── Layer cards ────────────────────────────────────────────── */
+
+.btn-new-layer {
+  border: 1px solid #c8d0db;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #243244;
+  background: #f8fafc;
+  white-space: nowrap;
 }
 
-.layer-item-active {
-  border-color: #0f4c81;
-  background: #eef5fc;
+.btn-new-layer:hover {
+  background: #f0f4f9;
 }
 
-.layer-item-main {
+.new-layer-wrapper {
+  position: relative;
+}
+
+.new-layer-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 34, 56, 0.13);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.new-layer-dropdown button {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.layer-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(36, 50, 68, 0.18);
-  flex-shrink: 0;
-}
-
-.layer-name {
-  margin: 0;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 0.83rem;
   font-weight: 600;
   color: #243244;
 }
 
-.layer-meta {
-  margin: 6px 0 0;
-  font-size: 0.8rem;
-  color: #5d6b7f;
-  text-transform: capitalize;
+.new-layer-dropdown button:hover {
+  background: #f1f5f9;
 }
 
-.layer-active-indicator {
-  margin: 8px 0 0;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #0f4c81;
+.layer-card {
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: #f9fbfd;
+  overflow: visible;
 }
 
-.layer-toggle {
-  margin-top: 8px;
-  display: inline-flex;
+.layer-card--active {
+  border-color: #0f4c81;
+  background: #eef5fc;
+}
+
+.layer-card--hidden {
+  opacity: 0.55;
+}
+
+.layer-card-row {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: #334155;
+  gap: 7px;
+  padding: 7px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  min-height: 36px;
 }
 
-.layer-toggle input {
-  margin: 0;
+.layer-card-row:hover {
+  background: rgba(15, 76, 129, 0.04);
+}
+
+.layer-card-symbol {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.layer-card-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #243244;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-name-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #243244;
+  border: 1px solid #0f4c81;
+  border-radius: 5px;
+  padding: 2px 6px;
+  background: #ffffff;
+  outline: none;
+}
+
+.layer-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.layer-eye-btn,
+.layer-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.layer-eye-btn:hover,
+.layer-menu-btn:hover {
+  background: #e8eef5;
+  color: #243244;
+}
+
+.layer-eye-btn--off {
+  color: #a0aec0;
+}
+
+.layer-menu-btn--open {
+  background: #e8eef5;
+  color: #243244;
+}
+
+.layer-menu-wrapper {
+  position: relative;
+}
+
+.layer-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 34, 56, 0.13);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.layer-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #243244;
+}
+
+.layer-dropdown button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.layer-dropdown button:disabled {
+  color: #a0aec0;
+}
+
+.layer-dropdown-divider {
+  height: 1px;
+  margin: 3px 6px;
+  background: #e8eef5;
+}
+
+.layer-dropdown-danger {
+  color: #c0392b !important;
+}
+
+.layer-dropdown-danger:hover:not(:disabled) {
+  background: #fef2f2 !important;
 }
 
 .layer-style-editor {
-  margin-top: 8px;
+  margin: 0 8px 8px;
   padding: 8px;
   border: 1px solid #dbe3ec;
   border-radius: 8px;
