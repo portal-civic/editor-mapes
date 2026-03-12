@@ -18,4 +18,5 @@ export const DEFAULT_LAYER_FIELDS = {
   showInWeb: true,
   showInExport: true,
   role: 'default',
+  legendOrder: null,
 }

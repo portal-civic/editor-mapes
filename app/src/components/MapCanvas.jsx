@@ -13,11 +13,11 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet'
+import { getTileLayerProps } from '../modules/maps'
+import { resolveIcon } from '../modules/layers'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
-const FALLBACK_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-const FALLBACK_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 
 function getDashArray(dashStyle) {
   if (dashStyle === 'dashed') {
@@ -234,9 +234,7 @@ function MapCanvas({
   onViewChange,
   onMapReady,
 }) {
-  const tileUrl = selectedBasemap?.url || FALLBACK_TILE_URL
-  const tileAttribution = selectedBasemap?.attribution || FALLBACK_ATTRIBUTION
-  const maxZoom = selectedBasemap?.maxZoom || 19
+  const tileLayerProps = getTileLayerProps(selectedBasemap)
   const isPointMode = activeWorkModeId === 'point'
   const isLineMode = activeWorkModeId === 'line'
   const isPolygonMode = activeWorkModeId === 'polygon'
@@ -261,33 +259,55 @@ function MapCanvas({
     [visibleLayerOrder],
   )
 
+  // Resolves the pixel radius from the unified `size` (diameter) field,
+  // falling back to the legacy `radius` field for old saved projects.
+  const resolvePointRadius = (style) => {
+    if (style?.size != null) return Math.max(1, Number(style.size) / 2)
+    return Math.max(1, Number(style?.radius) || 7)
+  }
+
   const createPointIcon = (style, isSelected = false) => {
-    const radius = Math.max(1, Number(style?.radius) || 7)
-    const fillColor = style?.fillColor || '#d4335b'
+    const markerType = style?.markerType ?? 'circle'
+    const radius = resolvePointRadius(style)
+    const fillColor = style?.fillColor ?? '#d4335b'
     const fillOpacity =
       Number.isFinite(Number(style?.fillOpacity)) ? Number(style.fillOpacity) : 0.9
-    const strokeColor = style?.strokeColor || '#d4335b'
+    const strokeColor = style?.strokeColor ?? '#d4335b'
     const strokeWidth =
       Number.isFinite(Number(style?.strokeWidth)) ? Number(style.strokeWidth) : 2
     const strokeOpacity =
-      Number.isFinite(Number(style?.strokeOpacity))
-        ? Number(style.strokeOpacity)
-        : 1
+      Number.isFinite(Number(style?.strokeOpacity)) ? Number(style.strokeOpacity) : 1
 
-    // Always reserve space for selection ring (radius+8 padding each side)
-    // so icon size stays stable when selection state changes.
+    // Always reserve space for the selection ring so icon dimensions stay
+    // stable when selection state changes.
     const pad = 9
-    const size = (radius + pad) * 2
+    const totalSize = (radius + pad) * 2
     const cx = radius + pad
     const cy = radius + pad
+
     const selectionRing = isSelected
       ? `<circle cx="${cx}" cy="${cy}" r="${radius + 6}" fill="none" stroke="#0f4c81" stroke-width="3" stroke-opacity="0.85" />`
       : ''
 
+    const circleEl = `<circle cx="${cx}" cy="${cy}" r="${Math.max(radius - strokeWidth / 2, 0)}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" />`
+
+    let iconEl = ''
+    if (markerType === 'icon-circle') {
+      const iconEntry = resolveIcon(style?.icon ?? null, style?.iconSet ?? 'builtin')
+      if (iconEntry) {
+        const iconColor = style?.iconColor ?? '#ffffff'
+        // Icon occupies ~58% of the circle diameter, centered.
+        const iconDisplaySize = radius * 1.16
+        const ix = cx - iconDisplaySize / 2
+        const iy = cy - iconDisplaySize / 2
+        iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24"><path d="${iconEntry.path}" fill="${iconColor}"/></svg>`
+      }
+    }
+
     return L.divIcon({
       className: '',
-      html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">${selectionRing}<circle cx="${cx}" cy="${cy}" r="${Math.max(radius - strokeWidth / 2, 0)}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-opacity="${strokeOpacity}" /></svg>`,
-      iconSize: [size, size],
+      html: `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">${selectionRing}${circleEl}${iconEl}</svg>`,
+      iconSize: [totalSize, totalSize],
       iconAnchor: [cx, cy],
     })
   }
@@ -413,9 +433,8 @@ function MapCanvas({
         />
         <ZoomControl position="topright" />
         <TileLayer
-          url={tileUrl}
-          attribution={tileAttribution}
-          maxZoom={maxZoom}
+          key={selectedBasemap?.id ?? 'default'}
+          {...tileLayerProps}
           crossOrigin="anonymous"
         />
 

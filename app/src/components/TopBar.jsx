@@ -1,4 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+const CATEGORY_LABELS = {
+  general: 'General',
+  light: 'Clars',
+  dark: 'Foscos',
+  satellite: "Satèl·lit",
+  topo: 'Topogràfic',
+  official: 'Oficial',
+  custom: 'Personalitzat',
+}
+
+const CATEGORY_ORDER = ['general', 'light', 'dark', 'satellite', 'topo', 'official', 'custom']
 
 const SEARCH_MIN_CHARS = 3
 const SEARCH_DEBOUNCE_MS = 300
@@ -21,6 +33,9 @@ function TopBar({
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [exportTitle, setExportTitle] = useState('')
   const [showLegend, setShowLegend] = useState(true)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  const exportMenuRef = useRef(null)
 
   const canSearch = searchQuery.trim().length >= SEARCH_MIN_CHARS
 
@@ -96,6 +111,17 @@ function TopBar({
     }
   }, [searchEndpoint])
 
+  useEffect(() => {
+    if (!showExportMenu) return
+    const handleOutside = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showExportMenu])
+
   const handleSuggestionClick = (suggestion) => {
     const hasBoundingBox =
       Array.isArray(suggestion.boundingbox) && suggestion.boundingbox.length === 4
@@ -142,7 +168,8 @@ function TopBar({
         <p className="eyebrow">Editor de mapes</p>
         <h1>Projecte actiu: Municipi (placeholder)</h1>
       </div>
-      <div className="topbar-actions">
+
+      <div className="topbar-center">
         <div className="topbar-search">
           <label className="topbar-field" htmlFor="municipality-search">
             <span>Municipi</span>
@@ -206,58 +233,107 @@ function TopBar({
             </ul>
           ) : null}
         </div>
+
         <label className="topbar-field">
           <span>Mapa base</span>
           <select
             value={selectedBasemapId}
             onChange={(event) => onBasemapChange?.(event.target.value)}
           >
-            {basemapOptions.map((basemap) => (
-              <option key={basemap.id} value={basemap.id}>
-                {basemap.label}
-              </option>
+            {CATEGORY_ORDER.filter((cat) =>
+              basemapOptions.some((b) => b.category === cat),
+            ).map((cat) => (
+              <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
+                {basemapOptions
+                  .filter((b) => b.category === cat)
+                  .map((basemap) => (
+                    <option key={basemap.id} value={basemap.id}>
+                      {basemap.name}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="topbar-right">
         <button type="button" onClick={onOpenProject}>
-          Obrir projecte
+          Obrir
         </button>
         <button type="button" onClick={onImportGeoJSON}>
           Importar GeoJSON
         </button>
-        <button type="button" onClick={onExportVisibleGeoJSON}>
-          Exportar visible a GeoJSON
-        </button>
-        <div className="topbar-export-options">
-          <input
-            type="text"
-            className="topbar-export-title"
-            placeholder="Títol del PNG..."
-            value={exportTitle}
-            onChange={(event) => setExportTitle(event.target.value)}
-            maxLength={120}
-          />
-          <label className="topbar-export-legend-toggle">
-            <input
-              type="checkbox"
-              checked={showLegend}
-              onChange={(event) => setShowLegend(event.target.checked)}
-            />
-            Llegenda
-          </label>
+
+        <div className="export-dropdown-wrapper" ref={exportMenuRef}>
           <button
             type="button"
-            onClick={() => onExportPNG({ title: exportTitle, showLegend })}
+            className="primary"
+            onClick={() => setShowExportMenu((v) => !v)}
           >
-            Exportar PNG
+            Exportar ▾
           </button>
+          {showExportMenu ? (
+            <div className="export-dropdown-panel">
+              <button
+                type="button"
+                onClick={() => {
+                  onExportProject?.()
+                  setShowExportMenu(false)
+                }}
+              >
+                Exportar projecte
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onExportWebProject?.()
+                  setShowExportMenu(false)
+                }}
+              >
+                Exportar projecte web
+              </button>
+              <div className="export-dropdown-divider" />
+              <button
+                type="button"
+                onClick={() => {
+                  onExportVisibleGeoJSON?.()
+                  setShowExportMenu(false)
+                }}
+              >
+                Exportar GeoJSON visible
+              </button>
+              <div className="export-dropdown-divider" />
+              <div className="export-dropdown-png">
+                <input
+                  type="text"
+                  className="topbar-export-title"
+                  placeholder="Títol del PNG..."
+                  value={exportTitle}
+                  onChange={(event) => setExportTitle(event.target.value)}
+                  maxLength={120}
+                />
+                <label className="topbar-export-legend-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showLegend}
+                    onChange={(event) => setShowLegend(event.target.checked)}
+                  />
+                  Llegenda
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onExportPNG?.({ title: exportTitle, showLegend })
+                    setShowExportMenu(false)
+                  }}
+                >
+                  Exportar PNG
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <button type="button" className="primary" onClick={onExportProject}>
-          Exportar projecte
-        </button>
-        <button type="button" onClick={onExportWebProject}>
-          Exportar projecte web
-        </button>
       </div>
     </header>
   )

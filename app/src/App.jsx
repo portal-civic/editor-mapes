@@ -2,9 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
-import LegendPanel from './components/LegendPanel'
 import MapToolbarSimple from './components/MapToolbarSimple'
 import FeatureInspector from './components/FeatureInspector'
+import LayerInspector from './components/LayerInspector'
 import useMapExport from './hooks/useMapExport'
 import {
   mockLayers,
@@ -132,6 +132,27 @@ function App() {
         )
         .map((layer) => layer.id),
     [layers],
+  )
+
+  const vectorLayers = useMemo(
+    () =>
+      layers.filter(
+        (l) =>
+          l.geometryType === 'point' ||
+          l.geometryType === 'line' ||
+          l.geometryType === 'polygon',
+      ),
+    [layers],
+  )
+
+  const editableLayer = useMemo(
+    () => vectorLayers.find((l) => l.id === editableLayerId) ?? null,
+    [vectorLayers, editableLayerId],
+  )
+
+  const editableLayerIndex = useMemo(
+    () => vectorLayers.findIndex((l) => l.id === editableLayerId),
+    [vectorLayers, editableLayerId],
   )
 
   const selectedFeatureData = useMemo(() => {
@@ -876,16 +897,11 @@ function App() {
           onCreateLineLayer={handleCreateLineLayer}
           onCreatePolygonLayer={handleCreatePolygonLayer}
           onRenameLayer={handleRenameLayer}
-          onDeleteLayer={handleDeleteLayer}
-          onLayerStyleChange={handleLayerStyleChange}
-          onMoveLayerUp={handleMoveLayerUp}
-          onMoveLayerDown={handleMoveLayerDown}
-          onExportLayerGeoJSON={handleExportLayerGeoJSON}
         />
         <section className="map-workspace">
           <MapToolbarSimple
             activeWorkModeId={activeWorkModeId}
-            editableLayerGeometryType={layers.find((l) => l.id === editableLayerId)?.geometryType ?? null}
+            editableLayerGeometryType={editableLayer?.geometryType ?? null}
             onModeChange={handleWorkModeChange}
           />
           {activeWorkModeId === 'line' && draftLinePoints.length > 0 ? (
@@ -951,8 +967,23 @@ function App() {
             onUpdate={handleFeatureUpdate}
             onClose={handleFeatureDeselect}
           />
+        ) : editableLayer ? (
+          <LayerInspector
+            key={editableLayer.id}
+            layer={editableLayer}
+            layerIndex={editableLayerIndex}
+            totalLayers={vectorLayers.length}
+            onRenameLayer={handleRenameLayer}
+            onLayerStyleChange={handleLayerStyleChange}
+            onMoveLayerUp={handleMoveLayerUp}
+            onMoveLayerDown={handleMoveLayerDown}
+            onExportLayerGeoJSON={handleExportLayerGeoJSON}
+            onDeleteLayer={handleDeleteLayer}
+          />
         ) : (
-          <LegendPanel layers={layers} />
+          <aside className="panel panel-right inspector-empty">
+            <p className="inspector-empty-state">Selecciona una capa per editar les propietats</p>
+          </aside>
         )}
       </main>
     </div>

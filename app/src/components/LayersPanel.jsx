@@ -76,14 +76,7 @@ function LayersPanel({
   onCreateLineLayer,
   onCreatePolygonLayer,
   onRenameLayer,
-  onDeleteLayer,
-  onLayerStyleChange,
-  onMoveLayerUp,
-  onMoveLayerDown,
-  onExportLayerGeoJSON,
 }) {
-  const [openMenuLayerId, setOpenMenuLayerId] = useState(null)
-  const [openStyleLayerId, setOpenStyleLayerId] = useState(null)
   const [editingNameLayerId, setEditingNameLayerId] = useState(null)
   const [editingNameValue, setEditingNameValue] = useState('')
   const [showNewLayerMenu, setShowNewLayerMenu] = useState(false)
@@ -103,30 +96,24 @@ function LayersPanel({
   }, [editingNameLayerId])
 
   useEffect(() => {
-    if (!openMenuLayerId && !showNewLayerMenu) return
-
+    if (!showNewLayerMenu) return
     const handleOutsideClick = (event) => {
       if (panelRef.current && !panelRef.current.contains(event.target)) {
-        setOpenMenuLayerId(null)
         setShowNewLayerMenu(false)
       }
     }
-
     document.addEventListener('mousedown', handleOutsideClick)
     return () => document.removeEventListener('mousedown', handleOutsideClick)
-  }, [openMenuLayerId, showNewLayerMenu])
+  }, [showNewLayerMenu])
 
   const startRename = (layer) => {
     setEditingNameLayerId(layer.id)
     setEditingNameValue(layer.name)
-    setOpenMenuLayerId(null)
   }
 
   const commitRename = (layerId) => {
     const trimmed = editingNameValue.trim()
-    if (trimmed) {
-      onRenameLayer?.(layerId, trimmed)
-    }
+    if (trimmed) onRenameLayer?.(layerId, trimmed)
     setEditingNameLayerId(null)
     setEditingNameValue('')
   }
@@ -185,14 +172,11 @@ function LayersPanel({
         </div>
       </div>
 
-      <div className="panel-content">
-        {vectorLayers.map((layer, vectorIndex) => {
+      <div className="layer-list">
+        {vectorLayers.map((layer) => {
           const isEditable = layer.id === editableLayerId
-          const isMenuOpen = openMenuLayerId === layer.id
-          const isStyleOpen = openStyleLayerId === layer.id
           const isEditingName = editingNameLayerId === layer.id
           const layerStyle = layer.style || {}
-
           const symbolColor =
             layer.geometryType === 'point'
               ? layerStyle.fillColor || layer.color
@@ -259,307 +243,8 @@ function LayersPanel({
                   >
                     <EyeIcon visible={layer.visible} />
                   </button>
-
-                  <div className="layer-menu-wrapper">
-                    <button
-                      type="button"
-                      className={`layer-menu-btn ${isMenuOpen ? 'layer-menu-btn--open' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setOpenMenuLayerId(isMenuOpen ? null : layer.id)
-                      }}
-                      aria-label="Més opcions"
-                    >
-                      ⋮
-                    </button>
-
-                    {isMenuOpen ? (
-                      <div className="layer-dropdown">
-                        <button type="button" onClick={() => startRename(layer)}>
-                          Renombrar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenStyleLayerId((id) => (id === layer.id ? null : layer.id))
-                            setOpenMenuLayerId(null)
-                          }}
-                        >
-                          Estil
-                        </button>
-                        <div className="layer-dropdown-divider" />
-                        <button
-                          type="button"
-                          disabled={vectorIndex === 0}
-                          onClick={() => {
-                            onMoveLayerUp?.(layer.id)
-                            setOpenMenuLayerId(null)
-                          }}
-                        >
-                          ↑ Pujar
-                        </button>
-                        <button
-                          type="button"
-                          disabled={vectorIndex === vectorLayers.length - 1}
-                          onClick={() => {
-                            onMoveLayerDown?.(layer.id)
-                            setOpenMenuLayerId(null)
-                          }}
-                        >
-                          ↓ Baixar
-                        </button>
-                        <div className="layer-dropdown-divider" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onExportLayerGeoJSON?.(layer.id)
-                            setOpenMenuLayerId(null)
-                          }}
-                        >
-                          Exportar GeoJSON
-                        </button>
-                        <div className="layer-dropdown-divider" />
-                        <button
-                          type="button"
-                          className="layer-dropdown-danger"
-                          onClick={() => {
-                            onDeleteLayer?.(layer.id)
-                            setOpenMenuLayerId(null)
-                          }}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
                 </span>
               </div>
-
-              {isStyleOpen ? (
-                <div className="layer-style-editor">
-                  {layer.geometryType === 'point' ? (
-                    <>
-                      <label>
-                        Radi
-                        <input
-                          type="number"
-                          min="1"
-                          max="24"
-                          value={layerStyle.radius ?? 7}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              radius: Number(e.target.value) || 1,
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Color interior
-                        <input
-                          type="color"
-                          value={layerStyle.fillColor ?? '#d4335b'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Opacitat interior
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layerStyle.fillOpacity ?? 0.9}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              fillOpacity: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Color contorn
-                        <input
-                          type="color"
-                          value={layerStyle.strokeColor ?? '#d4335b'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Gruix contorn
-                        <input
-                          type="number"
-                          min="0"
-                          max="12"
-                          value={layerStyle.strokeWidth ?? 2}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              strokeWidth: Number(e.target.value) || 0,
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Opacitat contorn
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layerStyle.strokeOpacity ?? 1}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              strokeOpacity: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                    </>
-                  ) : null}
-
-                  {layer.geometryType === 'line' ? (
-                    <>
-                      <label>
-                        Color
-                        <input
-                          type="color"
-                          value={layerStyle.color ?? '#ea8b1f'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { color: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Gruix
-                        <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          value={layerStyle.width ?? 3}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              width: Number(e.target.value) || 1,
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Opacitat
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layerStyle.opacity ?? 1}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              opacity: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Tipus de línia
-                        <select
-                          value={layerStyle.dashStyle ?? 'solid'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
-                          }
-                        >
-                          <option value="solid">Solid</option>
-                          <option value="dashed">Dashed</option>
-                          <option value="dotted">Dotted</option>
-                        </select>
-                      </label>
-                    </>
-                  ) : null}
-
-                  {layer.geometryType === 'polygon' ? (
-                    <>
-                      <label>
-                        Color vora
-                        <input
-                          type="color"
-                          value={layerStyle.strokeColor ?? '#2f7de1'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Gruix vora
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          value={layerStyle.strokeWidth ?? 2}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              strokeWidth: Number(e.target.value) || 0,
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Opacitat vora
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layerStyle.strokeOpacity ?? 1}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              strokeOpacity: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Color interior
-                        <input
-                          type="color"
-                          value={layerStyle.fillColor ?? '#2f7de1'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Opacitat interior
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layerStyle.fillOpacity ?? 0.18}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, {
-                              fillOpacity: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Tipus de vora
-                        <select
-                          value={layerStyle.dashStyle ?? 'solid'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
-                          }
-                        >
-                          <option value="solid">Solid</option>
-                          <option value="dashed">Dashed</option>
-                          <option value="dotted">Dotted</option>
-                        </select>
-                      </label>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
             </article>
           )
         })}

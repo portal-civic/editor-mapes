@@ -6,12 +6,16 @@ export function getDefaultLayerStyle(geometryType, layerColor) {
 
   if (geometryType === 'point') {
     return {
-      radius: 7,
+      markerType: 'circle',
+      size: 14,
       fillColor: color,
       fillOpacity: 0.9,
       strokeColor: color,
       strokeWidth: 2,
       strokeOpacity: 1,
+      icon: null,
+      iconSet: 'builtin',
+      iconColor: '#ffffff',
     }
   }
 
