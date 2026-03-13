@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { BUILTIN_ICONS } from '../modules/layers'
+import { useEffect, useMemo, useState } from 'react'
+import { TABLER_ICON_CATALOG } from '../icons/tablerIconCatalog'
+import { resolveTablerIcon } from '../icons/tablerIconResolver'
 
 // Resolves the display size (diameter) from style, supporting both the new
 // `size` field and the legacy `radius` field from old saved projects.
@@ -38,6 +39,57 @@ function GeomSymbol({ type, color, size = 16 }) {
     )
   }
   return null
+}
+
+const POPULAR_ICONS = TABLER_ICON_CATALOG.slice(0, 60)
+const ICON_LIMIT = 120
+
+function IconPicker({ selectedIcon, selectedIconSet, onSelect }) {
+  const [search, setSearch] = useState('')
+
+  const visibleIcons = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    const source = q
+      ? TABLER_ICON_CATALOG.filter(
+          (ic) => ic.id.includes(q) || ic.label.toLowerCase().includes(q) || ic.tags.some((t) => t.includes(q)),
+        )
+      : POPULAR_ICONS
+    return source.slice(0, ICON_LIMIT)
+  }, [search])
+
+  return (
+    <div className="icon-picker">
+      <input
+        type="text"
+        className="icon-picker-search"
+        placeholder="Buscar icona (ex: hospital, bus, escola)"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      {visibleIcons.length === 0 ? (
+        <p className="icon-picker-empty">Sense resultats</p>
+      ) : (
+        <div className="icon-picker-grid">
+          {visibleIcons.map((ic) => {
+            const IconComponent = resolveTablerIcon(ic.id)
+            if (!IconComponent) return null
+            const isActive = selectedIcon === ic.id && selectedIconSet === 'tabler'
+            return (
+              <button
+                key={ic.id}
+                type="button"
+                title={ic.label}
+                className={`icon-picker-btn${isActive ? ' icon-picker-btn--active' : ''}`}
+                onClick={() => onSelect(ic.id, 'tabler')}
+              >
+                <IconComponent size={16} stroke={2} />
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function LayerInspector({
@@ -142,31 +194,14 @@ function LayerInspector({
                 {/* Icon picker — only for icon-circle */}
                 {(layerStyle.markerType ?? 'circle') === 'icon-circle' ? (
                   <>
-                    <div className="icon-picker">
-                      <p className="icon-picker-label">Icona</p>
-                      <div className="icon-picker-grid">
-                        {BUILTIN_ICONS.map((ic) => (
-                          <button
-                            key={ic.id}
-                            type="button"
-                            title={ic.name}
-                            className={`icon-picker-btn${(layerStyle.icon ?? null) === ic.id ? ' icon-picker-btn--active' : ''}`}
-                            onClick={() =>
-                              onLayerStyleChange?.(layer.id, { icon: ic.id, iconSet: 'builtin' })
-                            }
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path d={ic.path} fill="currentColor" />
-                            </svg>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <p className="icon-picker-label">Icona</p>
+                    <IconPicker
+                      selectedIcon={layerStyle.icon ?? null}
+                      selectedIconSet={layerStyle.iconSet ?? 'tabler'}
+                      onSelect={(iconId, iconSet) =>
+                        onLayerStyleChange?.(layer.id, { icon: iconId, iconSet })
+                      }
+                    />
                     <label>
                       Color icona
                       <input

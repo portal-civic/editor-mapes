@@ -14,7 +14,7 @@ export function getDefaultLayerStyle(geometryType, layerColor) {
       strokeWidth: 2,
       strokeOpacity: 1,
       icon: null,
-      iconSet: 'builtin',
+      iconSet: 'tabler',
       iconColor: '#ffffff',
     }
   }

@@ -15,6 +15,7 @@ import {
 } from 'react-leaflet'
 import { getTileLayerProps } from '../modules/maps'
 import { resolveIcon } from '../modules/layers'
+import { getTablerIconSvgContent } from '../icons/tablerIconResolver'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -293,14 +294,27 @@ function MapCanvas({
 
     let iconEl = ''
     if (markerType === 'icon-circle') {
-      const iconEntry = resolveIcon(style?.icon ?? null, style?.iconSet ?? 'builtin')
-      if (iconEntry) {
-        const iconColor = style?.iconColor ?? '#ffffff'
-        // Icon occupies ~58% of the circle diameter, centered.
-        const iconDisplaySize = radius * 1.16
-        const ix = cx - iconDisplaySize / 2
-        const iy = cy - iconDisplaySize / 2
-        iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24"><path d="${iconEntry.path}" fill="${iconColor}"/></svg>`
+      const iconId = style?.icon ?? null
+      const iconSet = style?.iconSet ?? 'tabler'
+      const iconColor = style?.iconColor ?? '#ffffff'
+      // Icon occupies ~58% of the circle diameter, centered.
+      const iconDisplaySize = radius * 1.16
+      const ix = cx - iconDisplaySize / 2
+      const iy = cy - iconDisplaySize / 2
+
+      if (iconSet === 'tabler') {
+        const svgContent = getTablerIconSvgContent(iconId, iconColor)
+        if (svgContent) {
+          // Tabler icons are stroke-based. The outer SVG must carry fill="none"
+          // and explicit stroke attributes — inner paths inherit them from there.
+          iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`
+        }
+      } else {
+        // Legacy builtin icons
+        const iconEntry = resolveIcon(iconId, iconSet)
+        if (iconEntry) {
+          iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24"><path d="${iconEntry.path}" fill="${iconColor}"/></svg>`
+        }
       }
     }
 

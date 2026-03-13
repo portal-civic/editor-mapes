@@ -1047,10 +1047,39 @@ button.primary {
   color: #475569;
 }
 
+.icon-picker-search {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 0.8125rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #243244;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.icon-picker-search:focus {
+  border-color: #0f4c81;
+}
+
+.icon-picker-search::placeholder {
+  color: #94a3b8;
+}
+
+.icon-picker-empty {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
 .icon-picker-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 4px;
+  max-height: 192px;
+  overflow-y: auto;
 }
 
 .icon-picker-btn {
