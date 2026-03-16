@@ -107,6 +107,24 @@ textarea {
   background: #e2e8f0;
 }
 
+.topbar-add-layer-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #0f4c81;
+  background: #eef5fc;
+  border: 1px solid #b6cfe8;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topbar-add-layer-btn:hover {
+  background: #ddeaf8;
+  border-color: #0f4c81;
+}
+
 .topbar-search-results {
   position: absolute;
   top: calc(100% + 6px);
@@ -1106,4 +1124,47 @@ button.primary {
   background: #eef5fc;
   border-color: #0f4c81;
   color: #0f4c81;
+}
+
+.icon-picker-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  background: #eef5fc;
+  border: 1px solid #0f4c81;
+  border-radius: 7px;
+  color: #0f4c81;
+  font-size: 0.8125rem;
+}
+
+.icon-picker-preview-label {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-picker-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: #0f4c81;
+  opacity: 0.6;
+}
+
+.icon-picker-clear:hover {
+  opacity: 1;
+}
+
+.inspector-section-hint {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  color: #94a3b8;
 }

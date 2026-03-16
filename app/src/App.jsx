@@ -61,6 +61,8 @@ function App() {
   const [draftLinePoints, setDraftLinePoints] = useState([])
   const [draftPolygonPoints, setDraftPolygonPoints] = useState([])
   const [selectedFeature, setSelectedFeature] = useState(null)
+  // focusMask = { layerId, featureId, latlngs, opacity } | null
+  const [focusMask, setFocusMask] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -75,12 +77,21 @@ function App() {
         .filter((layer) => layer.geometryType === 'point' && layer.visible)
         .flatMap((layer) => {
           const features = Array.isArray(layer.features) ? layer.features : []
-          return features.map((feature) => ({
-            ...feature,
-            label: typeof feature.label === 'string' ? feature.label : '',
-            style: layer.style,
-            layerId: layer.id,
-          }))
+          return features.map((feature) => {
+            // Feature icon override: "fa:iconid" stored in feature.icon overrides
+            // the layer icon while inheriting all other style properties.
+            const featureIconMatch =
+              typeof feature.icon === 'string' ? feature.icon.match(/^fa:(.+)$/) : null
+            const effectiveStyle = featureIconMatch
+              ? { ...layer.style, markerType: 'icon-circle', icon: featureIconMatch[1], iconSet: 'fa' }
+              : layer.style
+            return {
+              ...feature,
+              label: typeof feature.label === 'string' ? feature.label : '',
+              style: effectiveStyle,
+              layerId: layer.id,
+            }
+          })
         }),
     [layers],
   )
@@ -173,6 +184,9 @@ function App() {
     setSelectedFeature(null)
   }
 
+  const handleSetFocusMask = (maskConfig) => setFocusMask(maskConfig)
+  const handleClearFocusMask = () => setFocusMask(null)
+
   const handleFeatureUpdate = (layerId, featureId, partialData) => {
     setLayers((currentLayers) =>
       currentLayers.map((layer) => {
@@ -210,6 +224,52 @@ function App() {
 
       return { center, zoom }
     })
+  }
+
+  // Converts a GeoJSON Polygon/MultiPolygon geometry to the Leaflet latlngs format
+  // used internally by polygon features. GeoJSON coords are [lng, lat]; Leaflet uses [lat, lng].
+  const geoJsonToLeafletLatlngs = (geometry) => {
+    const flipRing = (ring) => ring.map(([lng, lat]) => [lat, lng])
+    if (geometry.type === 'Polygon') {
+      return geometry.coordinates.map(flipRing)
+    }
+    if (geometry.type === 'MultiPolygon') {
+      return geometry.coordinates.map((polygon) => polygon.map(flipRing))
+    }
+    return null
+  }
+
+  const LIMITS_LAYER_COLOR = '#0f4c81'
+
+  const handleAddMunicipalityLayer = (selection) => {
+    if (!selection?.geometry) return
+    const latlngs = geoJsonToLeafletLatlngs(selection.geometry)
+    if (!latlngs) return
+
+    // Use only the first part of the Nominatim display_name (e.g. "Alzira" from "Alzira, ...").
+    const layerName = (selection.label || 'Límit municipal').split(',')[0].trim()
+    const layerId = `municipality-${Date.now()}-${Math.round(Math.random() * 10000)}`
+
+    const newFeature = normalizeFeature({
+      id: `${layerId}-feature`,
+      name: layerName,
+      sourceType: 'municipality',
+      latlngs,
+    })
+    if (!newFeature) return
+
+    // Each municipality gets its own dedicated layer.
+    const newLayer = {
+      id: layerId,
+      name: layerName,
+      color: LIMITS_LAYER_COLOR,
+      geometryType: 'polygon',
+      visible: true,
+      legendLabel: layerName,
+      style: getDefaultLayerStyle('polygon', LIMITS_LAYER_COLOR),
+      features: [newFeature],
+    }
+    setLayers((currentLayers) => [...currentLayers, newLayer])
   }
 
   const handleMunicipalitySelect = (selection) => {
@@ -879,6 +939,7 @@ function App() {
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
         onMunicipalitySelect={handleMunicipalitySelect}
+        onAddMunicipalityLayer={handleAddMunicipalityLayer}
         onOpenProject={handleOpenProjectClick}
         onImportGeoJSON={handleImportGeoJSONClick}
         onExportVisibleGeoJSON={handleExportVisibleGeoJSON}
@@ -957,6 +1018,7 @@ function App() {
             onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
             onViewChange={handleMapViewChange}
             onMapReady={handleMapReady}
+            focusMask={focusMask}
           />
         </section>
         {selectedFeatureData ? (
@@ -966,6 +1028,9 @@ function App() {
             layer={selectedFeatureData.layer}
             onUpdate={handleFeatureUpdate}
             onClose={handleFeatureDeselect}
+            focusMask={focusMask}
+            onSetFocusMask={handleSetFocusMask}
+            onClearFocusMask={handleClearFocusMask}
           />
         ) : editableLayer ? (
           <LayerInspector

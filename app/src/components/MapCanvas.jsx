@@ -16,6 +16,7 @@ import {
 import { getTileLayerProps } from '../modules/maps'
 import { resolveIcon } from '../modules/layers'
 import { getTablerIconSvgContent } from '../icons/tablerIconResolver'
+import { resolveFaIcon } from '../icons/faIconResolver'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -204,9 +205,42 @@ function MapLayerPanes({ orderedLayerIds }) {
     // line/polygon hit targets are reachable, but Marker clicks pass through the SVG.
     const interactionPane = map.getPane('interaction-pane') || map.createPane('interaction-pane')
     interactionPane.style.zIndex = '620'
+
+    // mask-pane sits above all data layers (420–450) but below markers (600).
+    // pointer-events are none on the mask polygon so clicks pass through.
+    const maskPane = map.getPane('mask-pane') || map.createPane('mask-pane')
+    maskPane.style.zIndex = '490'
   }, [map, orderedLayerIds])
 
   return null
+}
+
+// World bounding box used as the outer ring of the inverted mask polygon.
+const WORLD_BBOX = [[-90, -180], [-90, 180], [90, 180], [90, -180]]
+
+/**
+ * Builds the positions array for a Leaflet <Polygon> that covers the entire
+ * world except the interior of the given latlngs geometry.
+ *
+ * Uses the SVG fill-even-odd rule: WORLD_BBOX fills everything, and the
+ * polygon outer ring(s) become holes.
+ *
+ * Supports both internal formats:
+ *   Polygon:      latlngs = [[outerRing], [hole], ...]
+ *   MultiPolygon: latlngs = [[[outerRing], ...], [[outerRing], ...]]
+ *
+ * Detection: in a MultiPolygon, latlngs[0][0] is an array of [lat,lng] pairs
+ * (a ring), so latlngs[0][0][0] is itself an array.  In a plain Polygon,
+ * latlngs[0][0] is [lat, lng], so latlngs[0][0][0] is a number.
+ */
+function getMaskPositions(latlngs) {
+  const isMulti = Array.isArray(latlngs?.[0]?.[0]?.[0])
+  if (isMulti) {
+    // Each element is a polygon's rings array; take the outer ring of each.
+    return [WORLD_BBOX, ...latlngs.map((polygonRings) => polygonRings[0])]
+  }
+  // Single polygon: latlngs[0] is the outer ring.
+  return [WORLD_BBOX, latlngs[0]]
 }
 
 function MapCanvas({
@@ -224,6 +258,7 @@ function MapCanvas({
   draftPolygonPoints = [],
   editableLayerId = null,
   selectedFeature = null,
+  focusMask = null,
   onPointAdd,
   onPointDelete,
   onPointMove,
@@ -297,20 +332,25 @@ function MapCanvas({
       const iconId = style?.icon ?? null
       const iconSet = style?.iconSet ?? 'tabler'
       const iconColor = style?.iconColor ?? '#ffffff'
-      // Icon occupies ~58% of the circle diameter, centered.
-      const iconDisplaySize = radius * 1.16
+      // Icon occupies ~41% of the circle diameter — leaves breathing room around the edge.
+      const iconDisplaySize = radius * 0.82
       const ix = cx - iconDisplaySize / 2
       const iy = cy - iconDisplaySize / 2
 
-      if (iconSet === 'tabler') {
+      if (iconSet === 'fa') {
+        // Font Awesome Free — fill-based icons with variable viewBox dimensions.
+        const faData = resolveFaIcon(iconId)
+        if (faData) {
+          iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 ${faData.width} ${faData.height}"><path d="${faData.path}" fill="${iconColor}"/></svg>`
+        }
+      } else if (iconSet === 'tabler') {
+        // Tabler Icons (legacy) — stroke-based, stroke attrs must be on the wrapper.
         const svgContent = getTablerIconSvgContent(iconId, iconColor)
         if (svgContent) {
-          // Tabler icons are stroke-based. The outer SVG must carry fill="none"
-          // and explicit stroke attributes — inner paths inherit them from there.
           iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`
         }
       } else {
-        // Legacy builtin icons
+        // Legacy builtin icons (iconSet === 'builtin').
         const iconEntry = resolveIcon(iconId, iconSet)
         if (iconEntry) {
           iconEl = `<svg x="${ix}" y="${iy}" width="${iconDisplaySize}" height="${iconDisplaySize}" viewBox="0 0 24 24"><path d="${iconEntry.path}" fill="${iconColor}"/></svg>`
@@ -623,6 +663,20 @@ function MapCanvas({
               />
             ) : null}
           </>
+        ) : null}
+
+        {focusMask?.latlngs ? (
+          <Polygon
+            key={`mask-${focusMask.featureId}`}
+            positions={getMaskPositions(focusMask.latlngs)}
+            pane="mask-pane"
+            pathOptions={{
+              fillColor: '#ffffff',
+              fillOpacity: focusMask.opacity ?? 0.7,
+              stroke: false,
+            }}
+            interactive={false}
+          />
         ) : null}
 
         {isPolygonMode && hoverLatLng && draftPolygonPoints.length > 0 ? (

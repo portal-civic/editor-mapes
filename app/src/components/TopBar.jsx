@@ -20,6 +20,7 @@ function TopBar({
   selectedBasemapId = '',
   onBasemapChange,
   onMunicipalitySelect,
+  onAddMunicipalityLayer,
   onOpenProject,
   onImportGeoJSON,
   onExportVisibleGeoJSON,
@@ -31,6 +32,8 @@ function TopBar({
   const [suggestions, setSuggestions] = useState([])
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  // Tracks the last confirmed municipality selection (with geometry) for the "add to layer" action.
+  const [currentSelection, setCurrentSelection] = useState(null)
   const [exportTitle, setExportTitle] = useState('')
   const [showLegend, setShowLegend] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -141,13 +144,19 @@ function TopBar({
       }
     }
 
-    onMunicipalitySelect?.({
+    const selection = {
       label: suggestion.label,
       center: [suggestion.lat, suggestion.lon],
       bounds,
       geometry: suggestion.geometry,
       zoom: 12,
-    })
+    }
+    onMunicipalitySelect?.(selection)
+    setCurrentSelection(
+      suggestion.geometry && ['Polygon', 'MultiPolygon'].includes(suggestion.geometry.type)
+        ? selection
+        : null,
+    )
 
     setSearchQuery(suggestion.label)
     setSuggestions([])
@@ -159,6 +168,7 @@ function TopBar({
     setSuggestions([])
     setIsSearchLoading(false)
     setIsSearchOpen(false)
+    setCurrentSelection(null)
     onMunicipalitySelect?.(null)
   }
 
@@ -211,6 +221,19 @@ function TopBar({
               }}
             >
               ×
+            </button>
+          ) : null}
+          {currentSelection ? (
+            <button
+              type="button"
+              className="topbar-add-layer-btn"
+              title={`Afegir el límit de "${currentSelection.label}" com a capa poligonal`}
+              onMouseDown={(event) => {
+                event.preventDefault()
+                onAddMunicipalityLayer?.(currentSelection)
+              }}
+            >
+              + Capa
             </button>
           ) : null}
           {isSearchOpen && canSearch && (isSearchLoading || suggestions.length > 0) ? (

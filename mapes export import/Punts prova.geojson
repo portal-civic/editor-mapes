@@ -1,0 +1,101 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "pt-madrid",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.7038,
+          40.4168
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pt-valencia",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3763,
+          39.4699
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pt-zaragoza",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.8891,
+          41.6488
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pt-1773186456756-2462",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -7.250976562500001,
+          42.48019996901214
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pt-1773186458560-7573",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.27392578125,
+          42.3179394544685
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pt-1773186460040-3358",
+      "properties": {
+        "label": "",
+        "layerName": "Punts",
+        "layerType": "point"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -1.7578125000000002,
+          41.63186741069748
+        ]
+      }
+    }
+  ]
+}
