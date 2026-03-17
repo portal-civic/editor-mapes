@@ -6,6 +6,7 @@ import MapToolbarSimple from './components/MapToolbarSimple'
 import FeatureInspector from './components/FeatureInspector'
 import LayerInspector from './components/LayerInspector'
 import GeoJsonImportDialog from './components/GeoJsonImportDialog'
+import BearingControls from './components/BearingControls'
 import useMapExport from './hooks/useMapExport'
 import {
   mockLayers,
@@ -78,6 +79,8 @@ function App() {
   const [pendingGeoJSONImport, setPendingGeoJSONImport] = useState(null)
   // groups = [{ id, name }]
   const [groups, setGroups] = useState([])
+  // bearing: map rotation in degrees (0 = north up)
+  const [bearing, setBearing] = useState(0)
 
   const selectedBasemap = useMemo(
     () =>
@@ -268,6 +271,16 @@ function App() {
     )
   }
 
+  // Rotation is locked to 0 during any drawing/delete mode to avoid coordinate
+  // transform issues with custom draw handlers. Restores when back in select mode.
+  const effectiveBearing = activeWorkModeId === 'select' ? bearing : 0
+
+  const handleBearingRotate = (delta) => {
+    setBearing((prev) => Math.round((prev + delta + 360) % 360))
+  }
+
+  const handleBearingReset = () => setBearing(0)
+
   const handleWorkModeChange = (nextMode) => {
     setActiveWorkModeId(nextMode)
     setSelectedFeature(null)
@@ -375,7 +388,7 @@ function App() {
 
   const handleExportProject = () => {
     const projectData = buildProjectData({
-      mapView,
+      mapView: { ...mapView, bearing },
       selectedBasemapId,
       activeWorkModeId,
       editableLayerId,
@@ -400,7 +413,7 @@ function App() {
       return
     }
     try {
-      await exportAllVisibleLayers(mapInstanceRef.current, layers)
+      await exportAllVisibleLayers(mapInstanceRef.current, layers, selectedBasemap)
     } catch {
       window.alert("No s'ha pogut exportar les capes")
     }
@@ -559,6 +572,7 @@ function App() {
 
       setLayers(normalizeImportedLayers(importedProject.layers))
       setGroups(normalizeImportedGroups(importedProject.groups))
+      setBearing(typeof importedProject.mapView?.bearing === 'number' ? importedProject.mapView.bearing : 0)
       // Support new format (editableLayerId) and old format (activePointLayerId etc.)
       setEditableLayerId(
         importedProject.editableLayerId ??
@@ -1140,6 +1154,12 @@ function App() {
             editableLayerGeometryType={editableLayer?.geometryType ?? null}
             onModeChange={handleWorkModeChange}
           />
+          <BearingControls
+            bearing={effectiveBearing}
+            isSelectMode={activeWorkModeId === 'select'}
+            onRotate={handleBearingRotate}
+            onReset={handleBearingReset}
+          />
           {activeWorkModeId === 'line' && draftLinePoints.length > 0 ? (
             <div>
               <button
@@ -1171,6 +1191,7 @@ function App() {
           <MapCanvas
             selectedBasemap={selectedBasemap}
             activeWorkModeId={activeWorkModeId}
+            bearing={effectiveBearing}
             mapCenter={mapView.center}
             mapZoom={mapView.zoom}
             mapNavigationRequest={mapNavigationRequest}

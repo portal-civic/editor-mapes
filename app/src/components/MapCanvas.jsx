@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
+import 'leaflet-rotate'
 import {
   CircleMarker,
   GeoJSON,
@@ -132,6 +133,16 @@ function MapViewHandler({ onViewChange }) {
   return null
 }
 
+function BearingSync({ bearing }) {
+  const map = useMap()
+  useEffect(() => {
+    if (typeof map.setBearing === 'function') {
+      map.setBearing(bearing ?? 0)
+    }
+  }, [bearing, map])
+  return null
+}
+
 function MapInstanceBridge({ onMapReady }) {
   const map = useMap()
 
@@ -190,25 +201,41 @@ function MapLayerPanes({ orderedLayerIds }) {
   const map = useMap()
 
   useEffect(() => {
+    // When leaflet-rotate is active it creates _rotatePane inside _mapPane.
+    // Custom panes must live inside _rotatePane so they receive the same CSS
+    // rotation as tiles and default overlays. Falls back to undefined (default
+    // Leaflet behaviour: panes go directly into _mapPane) when rotation is off.
+    const rotateContainer = map._rotatePane || undefined
+
+    const ensurePane = (name, container) => {
+      let pane = map.getPane(name)
+      if (!pane) {
+        pane = map.createPane(name, container)
+      } else if (container && pane.parentNode !== container) {
+        container.appendChild(pane)
+      }
+      return pane
+    }
+
     // User layer panes sit BELOW Leaflet's markerPane (600) and above overlayPane (400).
     // This is critical: canvas elements in user layer panes must not sit above the
     // markerPane because canvas blocks all pointer events, even when interactive:false.
     // Markers are DOM elements in markerPane (600) and are always reachable.
     orderedLayerIds.forEach((layerId, index) => {
       const paneName = getLayerPaneName(layerId)
-      const pane = map.getPane(paneName) || map.createPane(paneName)
+      const pane = ensurePane(paneName, rotateContainer)
       pane.style.zIndex = String(420 + (orderedLayerIds.length - index))
     })
 
     // interaction-pane uses SVG renderer (pointer-events:none on <svg> container,
     // only individual <path> elements capture events). Placed above markerPane so
     // line/polygon hit targets are reachable, but Marker clicks pass through the SVG.
-    const interactionPane = map.getPane('interaction-pane') || map.createPane('interaction-pane')
+    const interactionPane = ensurePane('interaction-pane', rotateContainer)
     interactionPane.style.zIndex = '620'
 
     // mask-pane sits above all data layers (420–450) but below markers (600).
     // pointer-events are none on the mask polygon so clicks pass through.
-    const maskPane = map.getPane('mask-pane') || map.createPane('mask-pane')
+    const maskPane = ensurePane('mask-pane', rotateContainer)
     maskPane.style.zIndex = '490'
   }, [map, orderedLayerIds])
 
@@ -235,6 +262,7 @@ function getOuterRings(latlngs) {
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
+  bearing = 0,
   mapCenter = DEFAULT_CENTER,
   mapZoom = DEFAULT_ZOOM,
   mapNavigationRequest = null,
@@ -454,8 +482,10 @@ function MapCanvas({
         zoom={mapZoom}
         zoomControl={false}
         preferCanvas
+        rotate={true}
         className="map-canvas"
       >
+        <BearingSync bearing={bearing} />
         <MapInstanceBridge onMapReady={onMapReady} />
         <MapLayerPanes orderedLayerIds={visibleLayerOrder} />
         <MapCursorHandler isDrawMode={isDrawMode} />

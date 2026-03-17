@@ -16,6 +16,17 @@ export async function exportMapAsPNG({
 
   await new Promise((resolve) => map.whenReady(resolve))
 
+  // Temporarily reset bearing to 0 so tile/canvas capture works correctly.
+  // leaflet-rotate applies rotation via CSS transforms; the pixel-capture
+  // approach reads getBoundingClientRect() positions which are already
+  // rotated in screen space, causing cropping and misalignment.
+  const originalBearing = typeof map.getBearing === 'function' ? map.getBearing() : 0
+  if (originalBearing !== 0 && typeof map.setBearing === 'function') {
+    map.setBearing(0)
+    await waitNextFrame()
+    await waitNextFrame()
+  }
+
   map.invalidateSize({ animate: false, pan: false })
   const center = map.getCenter()
   const zoom = map.getZoom()
@@ -52,6 +63,11 @@ export async function exportMapAsPNG({
     exportCanvas.toBlob((blob) => resolve(blob), 'image/png'),
   )
   if (!pngBlob) throw new Error('Failed to create PNG blob')
+
+  // Restore original bearing after capture.
+  if (originalBearing !== 0 && typeof map.setBearing === 'function') {
+    map.setBearing(originalBearing)
+  }
 
   downloadBlob(pngBlob, fileName)
 }

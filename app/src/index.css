@@ -843,6 +843,44 @@ button.primary {
   background: rgba(255, 255, 255, 0.95);
 }
 
+.bearing-controls {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.bearing-btn {
+  padding: 3px 8px;
+  font-size: 13px;
+  border: 1px solid #d6dde6;
+  border-radius: 6px;
+  background: #f5f7fa;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.bearing-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bearing-btn--nord {
+  font-size: 11px;
+  padding: 3px 7px;
+}
+
+.bearing-label {
+  font-size: 11px;
+  color: #6b7a8f;
+  min-width: 28px;
+  text-align: right;
+}
+
 .topbar-export-title {
   font-size: 0.875rem;
   font-weight: 400;
