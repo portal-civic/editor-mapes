@@ -45,12 +45,18 @@ function LayerInspector({
   layer,
   layerIndex,
   totalLayers,
+  groups = [],
+  focusMask = null,
   onRenameLayer,
   onLayerStyleChange,
   onMoveLayerUp,
   onMoveLayerDown,
   onExportLayerGeoJSON,
   onDeleteLayer,
+  onSetLayerGroup,
+  onToggleLayerInMask,
+  onMaskOpacityChange,
+  onMaskColorChange,
 }) {
   const [nameValue, setNameValue] = useState(layer.name)
   const layerStyle = layer.style || {}
@@ -110,6 +116,20 @@ function LayerInspector({
           <p className="layer-props-meta">
             {geomLabel} · {featureCount} {featureCount === 1 ? 'element' : 'elements'}
           </p>
+          {groups.length > 0 ? (
+            <label className="layer-group-select-label">
+              Grup
+              <select
+                value={layer.groupId ?? ''}
+                onChange={(e) => onSetLayerGroup?.(layer.id, e.target.value || null)}
+              >
+                <option value="">— Cap grup —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <div className="inspector-section">
@@ -373,6 +393,43 @@ function LayerInspector({
             ) : null}
           </div>
         </div>
+
+        {layer.geometryType === 'polygon' ? (
+          <div className="inspector-section">
+            <p className="inspector-section-title">Màscara exterior</p>
+            <label className="layer-toggle">
+              <input
+                type="checkbox"
+                checked={focusMask?.layerIds?.includes(layer.id) ?? false}
+                onChange={(e) => onToggleLayerInMask?.(layer.id, e.target.checked)}
+              />
+              <span>Inclou en la màscara</span>
+            </label>
+            {focusMask?.layerIds?.length > 0 ? (
+              <>
+                <label>
+                  Opacitat
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    value={focusMask.opacity ?? 0.7}
+                    onChange={(e) => onMaskOpacityChange?.(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  Color de la màscara
+                  <input
+                    type="color"
+                    value={focusMask.color ?? '#ffffff'}
+                    onChange={(e) => onMaskColorChange?.(e.target.value)}
+                  />
+                </label>
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="inspector-section">
           <p className="inspector-section-title">Accions</p>

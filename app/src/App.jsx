@@ -5,6 +5,7 @@ import MapCanvas from './components/MapCanvas'
 import MapToolbarSimple from './components/MapToolbarSimple'
 import FeatureInspector from './components/FeatureInspector'
 import LayerInspector from './components/LayerInspector'
+import GeoJsonImportDialog from './components/GeoJsonImportDialog'
 import useMapExport from './hooks/useMapExport'
 import {
   mockLayers,
@@ -23,13 +24,21 @@ import {
   buildProjectData,
   isValidProjectData,
   normalizeImportedLayers,
+  normalizeImportedGroups,
   downloadWebProject,
 } from './modules/project'
 import {
   buildImportedLayersFromGeoJSON,
+  normalizeGeoJSONInput,
   convertLayerToGeoJSON,
   sanitizeGeoJSONFileName,
 } from './modules/geojson'
+import {
+  filterFeaturesByArea,
+  getImportAreaFromViewport,
+  getImportAreaFromGeoJSONGeometry,
+} from './modules/import/spatialFilter'
+import { IMPORT_MODES } from './modules/import/importOptions'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -63,6 +72,10 @@ function App() {
   const [selectedFeature, setSelectedFeature] = useState(null)
   // focusMask = { layerId, featureId, latlngs, opacity } | null
   const [focusMask, setFocusMask] = useState(null)
+  // pendingGeoJSONImport = { parsedData, fileName, featureCount } | null
+  const [pendingGeoJSONImport, setPendingGeoJSONImport] = useState(null)
+  // groups = [{ id, name }]
+  const [groups, setGroups] = useState([])
 
   const selectedBasemap = useMemo(
     () =>
@@ -184,8 +197,60 @@ function App() {
     setSelectedFeature(null)
   }
 
-  const handleSetFocusMask = (maskConfig) => setFocusMask(maskConfig)
-  const handleClearFocusMask = () => setFocusMask(null)
+  const handleToggleLayerInMask = (layerId, include) => {
+    setFocusMask((prev) => {
+      const currentIds = prev?.layerIds ?? []
+      const nextIds = include
+        ? [...new Set([...currentIds, layerId])]
+        : currentIds.filter((id) => id !== layerId)
+      if (nextIds.length === 0) return null
+      return {
+        layerIds: nextIds,
+        opacity: prev?.opacity ?? 0.7,
+        color: prev?.color ?? '#ffffff',
+      }
+    })
+  }
+
+  const handleMaskOpacityChange = (opacity) => {
+    setFocusMask((prev) => (prev ? { ...prev, opacity } : null))
+  }
+
+  const handleMaskColorChange = (color) => {
+    setFocusMask((prev) => (prev ? { ...prev, color } : null))
+  }
+
+  const handleCreateGroup = () => {
+    const nextId = `group-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    setGroups((prev) => [...prev, { id: nextId, name: `Grup ${prev.length + 1}` }])
+  }
+
+  const handleRenameGroup = (groupId, newName) => {
+    const trimmed = typeof newName === 'string' ? newName.trim() : ''
+    if (!trimmed) return
+    setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, name: trimmed } : g)))
+  }
+
+  const handleDeleteGroup = (groupId) => {
+    setLayers((current) =>
+      current.map((l) => (l.groupId === groupId ? { ...l, groupId: undefined } : l)),
+    )
+    setGroups((prev) => prev.filter((g) => g.id !== groupId))
+  }
+
+  const handleSetLayerGroup = (layerId, groupId) => {
+    setLayers((current) =>
+      current.map((l) =>
+        l.id === layerId ? { ...l, groupId: groupId || undefined } : l,
+      ),
+    )
+  }
+
+  const handleGroupVisibilityChange = (groupId, visible) => {
+    setLayers((current) =>
+      current.map((l) => (l.groupId === groupId ? { ...l, visible } : l)),
+    )
+  }
 
   const handleFeatureUpdate = (layerId, featureId, partialData) => {
     setLayers((currentLayers) =>
@@ -313,6 +378,7 @@ function App() {
       activeWorkModeId,
       editableLayerId,
       layers,
+      groups,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
     const blob = new Blob([jsonContent], { type: 'application/json' })
@@ -439,6 +505,7 @@ function App() {
       const importedProject = parsedData.project
 
       setLayers(normalizeImportedLayers(importedProject.layers))
+      setGroups(normalizeImportedGroups(importedProject.groups))
       // Support new format (editableLayerId) and old format (activePointLayerId etc.)
       setEditableLayerId(
         importedProject.editableLayerId ??
@@ -497,39 +564,80 @@ function App() {
     try {
       const fileContent = await selectedFile.text()
       const parsedData = JSON.parse(fileContent)
-      const importedLayers = buildImportedLayersFromGeoJSON(
-        parsedData,
-        selectedFile.name,
-      )
+      const normalizedFeatures = normalizeGeoJSONInput(parsedData)
 
-      if (!importedLayers) {
+      if (!normalizedFeatures) {
         window.alert('GeoJSON no vàlid')
         return
       }
 
-      const nextLayersToAdd = [
-        importedLayers.pointLayer,
-        importedLayers.lineLayer,
-        importedLayers.polygonLayer,
-      ].filter(Boolean)
-
-      if (nextLayersToAdd.length === 0) {
-        window.alert("No s'han trobat geometries compatibles en el GeoJSON")
-        return
-      }
-
-      setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, ...nextLayersToAdd]))
-
-      // Set the first imported layer as editable
-      const firstImported = importedLayers.pointLayer || importedLayers.lineLayer || importedLayers.polygonLayer
-      if (firstImported) {
-        setEditableLayerId(firstImported.id)
-      }
+      setPendingGeoJSONImport({
+        parsedData,
+        fileName: selectedFile.name,
+        featureCount: normalizedFeatures.length,
+      })
     } catch {
-      window.alert("No s'ha pogut importar el fitxer GeoJSON")
+      window.alert("No s'ha pogut llegir el fitxer GeoJSON")
     } finally {
       event.target.value = ''
     }
+  }
+
+  const doImportGeoJSON = (geojsonData, fileName) => {
+    const importedLayers = buildImportedLayersFromGeoJSON(geojsonData, fileName)
+
+    if (!importedLayers) {
+      window.alert('GeoJSON no vàlid')
+      return
+    }
+
+    const nextLayersToAdd = [
+      importedLayers.pointLayer,
+      importedLayers.lineLayer,
+      importedLayers.polygonLayer,
+    ].filter(Boolean)
+
+    if (nextLayersToAdd.length === 0) {
+      window.alert("No s'han trobat geometries compatibles en el GeoJSON")
+      return
+    }
+
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, ...nextLayersToAdd]))
+
+    const firstImported =
+      importedLayers.pointLayer || importedLayers.lineLayer || importedLayers.polygonLayer
+    if (firstImported) {
+      setEditableLayerId(firstImported.id)
+    }
+  }
+
+  const handleGeoJSONImportConfirm = ({ mode, municipalityGeometry }) => {
+    if (!pendingGeoJSONImport) return
+    const { parsedData, fileName } = pendingGeoJSONImport
+
+    let dataToImport = parsedData
+
+    if (mode === IMPORT_MODES.VIEWPORT || mode === IMPORT_MODES.MUNICIPALITY) {
+      let areaFeature = null
+      if (mode === IMPORT_MODES.VIEWPORT && mapInstanceRef.current) {
+        areaFeature = getImportAreaFromViewport(mapInstanceRef.current.getBounds())
+      } else if (mode === IMPORT_MODES.MUNICIPALITY && municipalityGeometry) {
+        areaFeature = getImportAreaFromGeoJSONGeometry(municipalityGeometry)
+      }
+
+      if (areaFeature) {
+        const allFeatures = normalizeGeoJSONInput(parsedData) || []
+        const filteredFeatures = filterFeaturesByArea(allFeatures, areaFeature)
+        dataToImport = { type: 'FeatureCollection', features: filteredFeatures }
+      }
+    }
+
+    setPendingGeoJSONImport(null)
+    doImportGeoJSON(dataToImport, fileName)
+  }
+
+  const handleGeoJSONImportCancel = () => {
+    setPendingGeoJSONImport(null)
   }
 
   const handleLayerVisibilityChange = (layerId, isVisible) => {
@@ -920,6 +1028,14 @@ function App() {
 
   return (
     <div className="editor-shell">
+      {pendingGeoJSONImport ? (
+        <GeoJsonImportDialog
+          fileName={pendingGeoJSONImport.fileName}
+          featureCount={pendingGeoJSONImport.featureCount}
+          onConfirm={handleGeoJSONImportConfirm}
+          onCancel={handleGeoJSONImportCancel}
+        />
+      ) : null}
       <input
         ref={importInputRef}
         type="file"
@@ -951,6 +1067,7 @@ function App() {
       <main className="workspace">
         <LayersPanel
           layers={layers}
+          groups={groups}
           editableLayerId={editableLayerId}
           onSetEditableLayer={handleSetEditableLayer}
           onLayerVisibilityChange={handleLayerVisibilityChange}
@@ -958,6 +1075,10 @@ function App() {
           onCreateLineLayer={handleCreateLineLayer}
           onCreatePolygonLayer={handleCreatePolygonLayer}
           onRenameLayer={handleRenameLayer}
+          onCreateGroup={handleCreateGroup}
+          onRenameGroup={handleRenameGroup}
+          onDeleteGroup={handleDeleteGroup}
+          onGroupVisibilityChange={handleGroupVisibilityChange}
         />
         <section className="map-workspace">
           <MapToolbarSimple
@@ -1028,9 +1149,6 @@ function App() {
             layer={selectedFeatureData.layer}
             onUpdate={handleFeatureUpdate}
             onClose={handleFeatureDeselect}
-            focusMask={focusMask}
-            onSetFocusMask={handleSetFocusMask}
-            onClearFocusMask={handleClearFocusMask}
           />
         ) : editableLayer ? (
           <LayerInspector
@@ -1038,12 +1156,18 @@ function App() {
             layer={editableLayer}
             layerIndex={editableLayerIndex}
             totalLayers={vectorLayers.length}
+            groups={groups}
+            focusMask={focusMask}
             onRenameLayer={handleRenameLayer}
             onLayerStyleChange={handleLayerStyleChange}
             onMoveLayerUp={handleMoveLayerUp}
             onMoveLayerDown={handleMoveLayerDown}
             onExportLayerGeoJSON={handleExportLayerGeoJSON}
             onDeleteLayer={handleDeleteLayer}
+            onSetLayerGroup={handleSetLayerGroup}
+            onToggleLayerInMask={handleToggleLayerInMask}
+            onMaskOpacityChange={handleMaskOpacityChange}
+            onMaskColorChange={handleMaskColorChange}
           />
         ) : (
           <aside className="panel panel-right inspector-empty">

@@ -219,28 +219,17 @@ function MapLayerPanes({ orderedLayerIds }) {
 const WORLD_BBOX = [[-90, -180], [-90, 180], [90, 180], [90, -180]]
 
 /**
- * Builds the positions array for a Leaflet <Polygon> that covers the entire
- * world except the interior of the given latlngs geometry.
- *
- * Uses the SVG fill-even-odd rule: WORLD_BBOX fills everything, and the
- * polygon outer ring(s) become holes.
- *
- * Supports both internal formats:
- *   Polygon:      latlngs = [[outerRing], [hole], ...]
- *   MultiPolygon: latlngs = [[[outerRing], ...], [[outerRing], ...]]
- *
- * Detection: in a MultiPolygon, latlngs[0][0] is an array of [lat,lng] pairs
- * (a ring), so latlngs[0][0][0] is itself an array.  In a plain Polygon,
- * latlngs[0][0] is [lat, lng], so latlngs[0][0][0] is a number.
+ * Returns the outer ring(s) of a polygon latlngs in all three internal formats:
+ *   Ring-format Polygon:  latlngs = [[outerRing], [hole], ...]   → [outerRing]
+ *   Flat-format Polygon:  latlngs = [[lat,lng], ...]             → [latlngs]
+ *   MultiPolygon:         latlngs = [[[outerRing],...], ...]     → [outerRing, outerRing, ...]
  */
-function getMaskPositions(latlngs) {
+function getOuterRings(latlngs) {
   const isMulti = Array.isArray(latlngs?.[0]?.[0]?.[0])
-  if (isMulti) {
-    // Each element is a polygon's rings array; take the outer ring of each.
-    return [WORLD_BBOX, ...latlngs.map((polygonRings) => polygonRings[0])]
-  }
-  // Single polygon: latlngs[0] is the outer ring.
-  return [WORLD_BBOX, latlngs[0]]
+  if (isMulti) return latlngs.map((rings) => rings[0])
+  const isRingFormat = Array.isArray(latlngs?.[0]?.[0])
+  if (isRingFormat) return [latlngs[0]]
+  return [latlngs]
 }
 
 function MapCanvas({
@@ -665,19 +654,26 @@ function MapCanvas({
           </>
         ) : null}
 
-        {focusMask?.latlngs ? (
-          <Polygon
-            key={`mask-${focusMask.featureId}`}
-            positions={getMaskPositions(focusMask.latlngs)}
-            pane="mask-pane"
-            pathOptions={{
-              fillColor: '#ffffff',
-              fillOpacity: focusMask.opacity ?? 0.7,
-              stroke: false,
-            }}
-            interactive={false}
-          />
-        ) : null}
+        {(() => {
+          if (!focusMask?.layerIds?.length) return null
+          const holes = polygonFeatures
+            .filter((f) => focusMask.layerIds.includes(f.layerId) && f.latlngs)
+            .flatMap((f) => getOuterRings(f.latlngs))
+          if (holes.length === 0) return null
+          return (
+            <Polygon
+              key={`mask-${focusMask.layerIds.join('-')}`}
+              positions={[WORLD_BBOX, ...holes]}
+              pane="mask-pane"
+              pathOptions={{
+                fillColor: focusMask.color ?? '#ffffff',
+                fillOpacity: focusMask.opacity ?? 0.7,
+                stroke: false,
+              }}
+              interactive={false}
+            />
+          )
+        })()}
 
         {isPolygonMode && hoverLatLng && draftPolygonPoints.length > 0 ? (
           <Polyline

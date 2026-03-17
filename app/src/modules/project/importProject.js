@@ -19,3 +19,10 @@ export function normalizeImportedLayers(layers) {
   }))
   return ensureInitialPointLayer(normalized)
 }
+
+export function normalizeImportedGroups(groups) {
+  if (!Array.isArray(groups)) return []
+  return groups
+    .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')
+    .map((g) => ({ id: g.id, name: g.name }))
+}

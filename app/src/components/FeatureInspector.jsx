@@ -8,8 +8,7 @@ function parseFeatureIcon(value) {
   return m ? m[1] : null
 }
 
-function FeatureInspector({ feature, layer, onUpdate, onClose, focusMask, onSetFocusMask, onClearFocusMask }) {
-  const isMaskActive = focusMask?.layerId === layer.id && focusMask?.featureId === feature.id
+function FeatureInspector({ feature, layer, onUpdate, onClose }) {
   const [draft, setDraft] = useState({
     name: feature.name ?? '',
     label: feature.label ?? '',
@@ -119,50 +118,6 @@ function FeatureInspector({ feature, layer, onUpdate, onClose, focusMask, onSetF
                 onUpdate?.(layer.id, feature.id, { icon: '' })
               }}
             />
-          </div>
-        ) : null}
-        {layer.geometryType === 'polygon' && feature.latlngs ? (
-          <div className="inspector-section">
-            <p className="inspector-section-title">Màscara exterior</p>
-            {focusMask && !isMaskActive ? (
-              <p className="inspector-section-hint">
-                Una altra màscara ja és activa. Activa esta per substituir-la.
-              </p>
-            ) : null}
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={isMaskActive}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    onSetFocusMask?.({
-                      layerId: layer.id,
-                      featureId: feature.id,
-                      latlngs: feature.latlngs,
-                      opacity: focusMask?.opacity ?? 0.7,
-                    })
-                  } else {
-                    onClearFocusMask?.()
-                  }
-                }}
-              />
-              <span>Activar màscara exterior</span>
-            </label>
-            {isMaskActive ? (
-              <label>
-                Opacitat
-                <input
-                  type="range"
-                  min={0.1}
-                  max={0.95}
-                  step={0.05}
-                  value={focusMask.opacity}
-                  onChange={(e) =>
-                    onSetFocusMask?.({ ...focusMask, opacity: Number(e.target.value) })
-                  }
-                />
-              </label>
-            ) : null}
           </div>
         ) : null}
 

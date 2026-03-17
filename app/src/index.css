@@ -1168,3 +1168,336 @@ button.primary {
   font-size: 0.75rem;
   color: #94a3b8;
 }
+
+/* ─── GeoJSON import dialog ─────────────────────────────────────── */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 28, 46, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-panel {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 28, 46, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dialog-header button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #6b7a8d;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.dialog-header button:hover {
+  background: #f1f5f9;
+  color: #243244;
+}
+
+.dialog-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialog-file-info {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7a8d;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 7px;
+  border: 1px solid #e3e8ef;
+}
+
+.dialog-fieldset {
+  border: 1px solid #e3e8ef;
+  border-radius: 9px;
+  padding: 10px 14px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dialog-fieldset legend {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+.dialog-radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.dialog-radio-option input[type="radio"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: #0f4c81;
+}
+
+.dialog-radio-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialog-radio-option strong {
+  font-size: 0.875rem;
+  color: #243244;
+}
+
+.dialog-option-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.dialog-municipality-search {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog-municipality-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dialog-municipality-input-wrapper input {
+  flex: 1;
+  border: 1px solid #c8d0db;
+  border-radius: 7px;
+  padding: 6px 30px 6px 10px;
+  font-size: 0.875rem;
+}
+
+.dialog-municipality-input-wrapper input:focus {
+  outline: none;
+  border-color: #0f4c81;
+  box-shadow: 0 0 0 2px rgba(15, 76, 129, 0.12);
+}
+
+.dialog-clear-btn {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.dialog-clear-btn:hover {
+  color: #243244;
+}
+
+.dialog-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: #fff;
+  border: 1px solid #d6dde6;
+  border-radius: 9px;
+  box-shadow: 0 8px 20px rgba(15, 34, 56, 0.1);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.dialog-search-results li {
+  padding: 0;
+}
+
+.dialog-search-results li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 7px 12px;
+  font-size: 0.8125rem;
+  color: #243244;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.dialog-search-results li button:hover {
+  background: #f1f5f9;
+}
+
+.dialog-municipality-selected {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #1a7a4a;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dialog-municipality-check {
+  font-weight: 700;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 16px;
+  border-top: 1px solid #e8ecf1;
+}
+
+/* ─── Layer groups ──────────────────────────────────────────────── */
+
+.new-layer-dropdown-divider {
+  height: 1px;
+  background: #e8ecf1;
+  margin: 4px 0;
+}
+
+.layer-group {
+  margin-bottom: 2px;
+}
+
+.layer-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px 5px 8px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1px solid #e3e8ef;
+  user-select: none;
+}
+
+.layer-group-collapse-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #6b7a8d;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.layer-group-collapse-btn:hover {
+  background: #e3e8ef;
+  color: #243244;
+}
+
+.layer-group-name {
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.layer-group-name-input {
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #243244;
+  border: 1px solid #0f4c81;
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: #fff;
+  outline: none;
+  min-width: 0;
+}
+
+.layer-group-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.layer-group-delete-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #94a3b8;
+  border-radius: 4px;
+}
+
+.layer-group-delete-btn:hover {
+  color: #c0392b;
+  background: #fef2f2;
+}
+
+.layer-group-empty {
+  margin: 2px 0 4px 24px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.layer-card--in-group {
+  margin-left: 16px;
+}
+
+/* Group select in LayerInspector */
+.layer-group-select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8125rem;
+  color: #475569;
+  margin-top: 6px;
+}
+
+.layer-group-select-label select {
+  border: 1px solid #c8d0db;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 0.8125rem;
+  background: #fff;
+  color: #243244;
+}

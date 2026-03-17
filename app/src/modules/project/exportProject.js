@@ -4,6 +4,7 @@ export function buildProjectData({
   activeWorkModeId,
   editableLayerId,
   layers,
+  groups,
 }) {
   return {
     version: 1,
@@ -14,6 +15,7 @@ export function buildProjectData({
       activeWorkModeId,
       editableLayerId,
       layers,
+      groups: Array.isArray(groups) ? groups : [],
     },
   }
 }
