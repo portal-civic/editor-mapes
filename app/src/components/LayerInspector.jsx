@@ -52,6 +52,8 @@ function LayerInspector({
   onMoveLayerUp,
   onMoveLayerDown,
   onExportLayerGeoJSON,
+  onExportLayerSVG,
+  onExportLayerHybrid,
   onDeleteLayer,
   onSetLayerGroup,
   onToggleLayerInMask,
@@ -453,6 +455,14 @@ function LayerInspector({
             <button type="button" onClick={() => onExportLayerGeoJSON?.(layer.id)}>
               Exportar GeoJSON
             </button>
+            <button type="button" onClick={() => onExportLayerSVG?.(layer.id)}>
+              Exportar SVG (prova)
+            </button>
+            {layer.geometryType === 'point' ? (
+              <button type="button" onClick={() => onExportLayerHybrid?.(layer.id)}>
+                Exportar PNG + SVG (prova)
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn-danger-layer"

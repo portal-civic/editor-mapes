@@ -27,6 +27,7 @@ function TopBar({
   onExportPNG,
   onExportProject,
   onExportWebProject,
+  onExportAllLayers,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -325,6 +326,16 @@ function TopBar({
                 }}
               >
                 Exportar GeoJSON visible
+              </button>
+              <div className="export-dropdown-divider" />
+              <button
+                type="button"
+                onClick={() => {
+                  onExportAllLayers?.()
+                  setShowExportMenu(false)
+                }}
+              >
+                Exportar capes visibles per a Affinity (prova)
               </button>
               <div className="export-dropdown-divider" />
               <div className="export-dropdown-png">

@@ -27,6 +27,8 @@ import {
   normalizeImportedGroups,
   downloadWebProject,
 } from './modules/project'
+import { buildLayerSVG } from './modules/export/exportSVG'
+import { exportHybridPointLayer, exportAllVisibleLayers } from './modules/export/exportHybrid'
 import {
   buildImportedLayersFromGeoJSON,
   normalizeGeoJSONInput,
@@ -390,6 +392,57 @@ function App() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(downloadUrl)
+  }
+
+  const handleExportAllLayers = async () => {
+    if (!mapInstanceRef.current) {
+      window.alert("No s'ha trobat el mapa per exportar")
+      return
+    }
+    try {
+      await exportAllVisibleLayers(mapInstanceRef.current, layers)
+    } catch {
+      window.alert("No s'ha pogut exportar les capes")
+    }
+  }
+
+  const handleExportHybrid = async (layerId) => {
+    const layer = layers.find((l) => l.id === layerId)
+    if (!layer || layer.geometryType !== 'point') return
+    if (!mapInstanceRef.current) {
+      window.alert("No s'ha trobat el mapa per exportar")
+      return
+    }
+    try {
+      await exportHybridPointLayer(mapInstanceRef.current, layer)
+    } catch {
+      window.alert("No s'ha pogut exportar PNG + SVG")
+    }
+  }
+
+  const handleExportLayerSVG = (layerId) => {
+    const layer = layers.find((l) => l.id === layerId)
+    if (!layer) return
+    if (!mapInstanceRef.current) {
+      window.alert("No s'ha trobat el mapa per exportar")
+      return
+    }
+    const map = mapInstanceRef.current
+    const rect = map.getContainer().getBoundingClientRect()
+    const width = Math.round(rect.width) || 800
+    const height = Math.round(rect.height) || 600
+    const bounds = map.getBounds()
+    const svgContent = buildLayerSVG(layer, bounds, width, height)
+    if (!svgContent) return
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${layer.name || 'capa'}.svg`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const handleExportLayerGeoJSON = (layerId) => {
@@ -1062,6 +1115,7 @@ function App() {
         onExportPNG={handleExportPNG}
         onExportProject={handleExportProject}
         onExportWebProject={handleExportWebProject}
+        onExportAllLayers={handleExportAllLayers}
       />
 
       <main className="workspace">
@@ -1163,6 +1217,8 @@ function App() {
             onMoveLayerUp={handleMoveLayerUp}
             onMoveLayerDown={handleMoveLayerDown}
             onExportLayerGeoJSON={handleExportLayerGeoJSON}
+            onExportLayerSVG={handleExportLayerSVG}
+            onExportLayerHybrid={handleExportHybrid}
             onDeleteLayer={handleDeleteLayer}
             onSetLayerGroup={handleSetLayerGroup}
             onToggleLayerInMask={handleToggleLayerInMask}
