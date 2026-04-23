@@ -1592,3 +1592,381 @@ button.primary {
   border: 1px solid #c8d0db;
   border-radius: 5px;
 }
+
+/* ── Categorical styling ──────────────────────────────────────────────── */
+
+.categorical-generate-row {
+  margin: 4px 0 6px;
+}
+
+.categorical-generate-row button {
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border: 1px solid #c8d0db;
+  border-radius: 5px;
+  background: #f0f4f8;
+  cursor: pointer;
+}
+
+.categorical-generate-row button:hover {
+  background: #e2e8f0;
+}
+
+.categorical-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.categorical-category-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.categorical-category-row input[type='color'] {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #c8d0db;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.categorical-category-label {
+  font-size: 0.8rem;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+/* ── Categorical diagnostic panel ────────────────────────────────────── */
+
+.catdiag-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px;
+  background: #f0f4f8;
+  border-radius: 5px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.catdiag-fields-hint {
+  color: #64748b;
+  font-style: italic;
+}
+
+.catdiag-warn {
+  font-size: 0.78rem;
+  color: #b45309;
+  margin: 3px 0;
+}
+
+.catdiag-dist {
+  margin: 5px 0 4px;
+}
+
+.catdiag-dist-title {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0 0 3px;
+}
+
+.catdiag-dist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  padding: 3px 4px;
+  background: #fff;
+}
+
+.catdiag-dist-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 20px;
+}
+
+.catdiag-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.catdiag-dist-val {
+  flex: 1;
+  font-size: 0.78rem;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.catdiag-dist-count {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: right;
+}
+
+.catdiag-dist-more {
+  font-size: 0.73rem;
+  color: #94a3b8;
+  margin: 2px 0 0;
+}
+
+.catdiag-sample {
+  margin-top: 6px;
+  padding: 5px 7px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+}
+
+.catdiag-sample-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  min-height: 18px;
+}
+
+.catdiag-sample-idx {
+  color: #94a3b8;
+  min-width: 20px;
+}
+
+.catdiag-sample-val {
+  font-family: monospace;
+  font-size: 0.72rem;
+  background: #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 4px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catdiag-ok {
+  color: #16a34a;
+  font-size: 0.75rem;
+}
+
+.catdiag-miss {
+  color: #dc2626;
+  font-size: 0.75rem;
+}
+
+/* ── Palette controls ─────────────────────────────────────────────────── */
+
+.cat-palette-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0 4px;
+  flex-wrap: wrap;
+}
+
+.cat-palette-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  padding: 3px 5px;
+  border: 1px solid #c8d0db;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.cat-palette-btn {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  border: 1px solid #c8d0db;
+  border-radius: 5px;
+  background: #f0f4f8;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cat-palette-btn:hover {
+  background: #e2e8f0;
+}
+
+/* ── Category editor table ────────────────────────────────────────────── */
+
+.cat-editor-list {
+  margin: 5px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cat-editor-header,
+.cat-editor-row {
+  display: grid;
+  grid-template-columns: 22px 52px 1fr 28px 18px 18px 36px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+}
+
+.cat-editor-header {
+  background: #f0f4f8;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.cat-editor-rows {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.cat-editor-row {
+  border-bottom: 1px solid #f1f5f9;
+  min-height: 26px;
+}
+
+.cat-editor-row:last-child {
+  border-bottom: none;
+}
+
+.cat-editor-row--hidden {
+  opacity: 0.45;
+}
+
+.cat-col-color {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #c8d0db;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cat-col-value {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-col-label {
+  font-size: 0.78rem;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  width: 100%;
+  min-width: 0;
+}
+
+.cat-col-label:hover,
+.cat-col-label:focus {
+  border-color: #c8d0db;
+  background: #fff;
+  outline: none;
+}
+
+.cat-col-count {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cat-col-vis,
+.cat-col-leg {
+  justify-self: center;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.cat-col-order {
+  display: flex;
+  gap: 2px;
+}
+
+.cat-col-order button {
+  padding: 0 3px;
+  font-size: 0.7rem;
+  border: 1px solid #c8d0db;
+  border-radius: 3px;
+  background: #f8fafc;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.cat-col-order button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cat-col-order button:not(:disabled):hover {
+  background: #e2e8f0;
+}
+
+/* ── Legend settings ──────────────────────────────────────────────────── */
+
+.cat-legend-section {
+  margin-top: 8px;
+  padding: 6px 7px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.cat-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #334155;
+  margin-bottom: 5px;
+}
+
+.cat-legend-row:last-child {
+  margin-bottom: 0;
+}
+
+.cat-legend-row input[type='text'],
+.cat-legend-row select {
+  flex: 1;
+  font-size: 0.78rem;
+  padding: 3px 6px;
+  border: 1px solid #c8d0db;
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.cat-legend-row--check {
+  gap: 8px;
+}
+
+.cat-legend-row--check input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}

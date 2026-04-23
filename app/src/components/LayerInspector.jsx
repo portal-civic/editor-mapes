@@ -1,8 +1,345 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import IconPicker from './IconPicker'
+import { getDatasetFeatures } from '../modules/sources/sourceStore'
+import { normalizeCategory } from '../modules/sources/categoricalStyle'
+import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
 
-// Resolves the display size (diameter) from style, supporting both the new
-// `size` field and the legacy `radius` field from old saved projects.
+// ─── CategoricalStyleEditor ───────────────────────────────────────────────────
+
+function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange }) {
+  const fields = layer.meta?.fields ?? []
+  const categorical = layer.categorical ?? {}
+  const field = categorical.field ?? ''
+  const legend = layer.legend ?? {}
+
+  // Normalize on read — migrates old { value, style: { color } } to full model
+  const categories = useMemo(
+    () => (categorical.categories ?? []).map(normalizeCategory),
+    [categorical.categories],
+  )
+
+  const [selectedPaletteId, setSelectedPaletteId] = useState('default')
+
+  // Map: raw key → category (for value distribution display)
+  const categoryKeyMap = useMemo(() => {
+    const m = new Map()
+    for (const cat of categories) {
+      m.set(cat.value == null ? '__null__' : String(cat.value), cat)
+    }
+    return m
+  }, [categories])
+
+  // Value distribution from the external dataset store
+  const distInfo = useMemo(() => {
+    if (!layer.datasetId) return null
+    const features = getDatasetFeatures(layer.datasetId)
+    const totalFeatures = features.length
+    if (!field) return { totalFeatures, values: [] }
+    const counts = new Map()
+    for (const f of features) {
+      const v = f.properties?.[field]
+      const k = v == null ? '__null__' : String(v)
+      counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+    const values = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, count]) => ({ k, display: k === '__null__' ? '(buit)' : k, count }))
+    return { totalFeatures, values }
+  }, [field, layer.datasetId])
+
+  // First 5 features for per-feature attribute verification
+  const sampleRows = useMemo(() => {
+    if (!field || !layer.datasetId || !categories.length) return null
+    const features = getDatasetFeatures(layer.datasetId)
+    return features.slice(0, 5).map((f, i) => {
+      const raw = f.properties?.[field]
+      const k = raw == null ? '__null__' : String(raw)
+      return { i, raw, found: categoryKeyMap.has(k) }
+    })
+  }, [field, layer.datasetId, categoryKeyMap, categories.length])
+
+  const updateCategories = (next) =>
+    onLayerCategoricalChange?.(layer.id, { field, categories: next })
+
+  const updateCat = (index, updates) =>
+    updateCategories(categories.map((c, i) => (i === index ? { ...c, ...updates } : c)))
+
+  const moveCategory = (index, dir) => {
+    const next = [...categories]
+    const t = index + dir
+    if (t < 0 || t >= next.length) return
+    ;[next[index], next[t]] = [next[t], next[index]]
+    updateCategories(next)
+  }
+
+  return (
+    <>
+      {/* Dataset info */}
+      <div className="catdiag-info">
+        <span>
+          {distInfo
+            ? `${distInfo.totalFeatures.toLocaleString()} features al dataset`
+            : 'Dataset no disponible'}
+        </span>
+        {fields.length > 0 ? (
+          <span className="catdiag-fields-hint">
+            {fields.length} camps: {fields.slice(0, 5).join(', ')}
+            {fields.length > 5 ? ` +${fields.length - 5} més` : ''}
+          </span>
+        ) : (
+          <span className="catdiag-warn">⚠ No hi ha camps (meta.fields buit)</span>
+        )}
+      </div>
+
+      {/* Field selector */}
+      <label>
+        Camp de classificació
+        <select
+          value={field}
+          onChange={(e) =>
+            onLayerCategoricalChange?.(layer.id, { field: e.target.value, categories: [] })
+          }
+        >
+          <option value="">— Triar camp —</option>
+          {fields.map((f) => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+      </label>
+
+      {/* Value distribution (before and after generation) */}
+      {field && distInfo && distInfo.values.length > 0 ? (
+        <div className="catdiag-dist">
+          <p className="catdiag-dist-title">
+            Valors únics de <strong>"{field}"</strong> ({distInfo.values.length}):
+          </p>
+          <div className="catdiag-dist-list">
+            {distInfo.values.slice(0, 30).map(({ k, display, count }) => {
+              const cat = categoryKeyMap.get(k)
+              return (
+                <div key={k} className="catdiag-dist-row">
+                  <span
+                    className="catdiag-swatch"
+                    style={{
+                      background: cat ? (cat.color ?? '#888') : 'transparent',
+                      border: cat ? 'none' : '1px dashed #c8d0db',
+                    }}
+                  />
+                  <span className="catdiag-dist-val" title={display}>{display}</span>
+                  <span className="catdiag-dist-count">{count}</span>
+                </div>
+              )
+            })}
+            {distInfo.values.length > 30 ? (
+              <p className="catdiag-dist-more">…i {distInfo.values.length - 30} valors més</p>
+            ) : null}
+          </div>
+        </div>
+      ) : field && distInfo && distInfo.values.length === 0 ? (
+        <p className="catdiag-warn">⚠ Cap valor trobat per "{field}"</p>
+      ) : null}
+
+      {/* Palette selector + generate / apply */}
+      {field ? (
+        <div className="cat-palette-row">
+          <select
+            className="cat-palette-select"
+            value={selectedPaletteId}
+            onChange={(e) => setSelectedPaletteId(e.target.value)}
+          >
+            {PALETTE_ORDER.map((id) => (
+              <option key={id} value={id}>{PALETTES[id].name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="cat-palette-btn"
+            title="Generar categories amb aquesta paleta"
+            onClick={() =>
+              onLayerCategoricalChange?.(layer.id, {
+                field,
+                _generate: true,
+                paletteId: selectedPaletteId,
+              })
+            }
+          >
+            Generar
+          </button>
+          {categories.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="cat-palette-btn"
+                title="Aplicar paleta a les categories existents"
+                onClick={() =>
+                  onLayerCategoricalChange?.(layer.id, {
+                    field,
+                    _applyPalette: true,
+                    paletteId: selectedPaletteId,
+                  })
+                }
+              >
+                Aplicar
+              </button>
+              <button
+                type="button"
+                className="cat-palette-btn"
+                title="Aplicar paleta invertida"
+                onClick={() =>
+                  onLayerCategoricalChange?.(layer.id, {
+                    field,
+                    _applyPalette: true,
+                    paletteId: selectedPaletteId,
+                    invert: true,
+                  })
+                }
+              >
+                ⇅
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Category editor list */}
+      {categories.length > 0 ? (
+        <div className="cat-editor-list">
+          <div className="cat-editor-header">
+            <span className="cat-col-color" />
+            <span className="cat-col-value">Valor</span>
+            <span className="cat-col-label">Etiqueta</span>
+            <span className="cat-col-count" title="Features">#</span>
+            <span className="cat-col-vis" title="Visible al mapa">👁</span>
+            <span className="cat-col-leg" title="Visible a la llegenda">☰</span>
+            <span className="cat-col-order" />
+          </div>
+          <div className="cat-editor-rows">
+            {categories.map((cat, i) => (
+              <div
+                key={cat.value == null ? '__null__' : String(cat.value)}
+                className={`cat-editor-row${cat.visible === false ? ' cat-editor-row--hidden' : ''}`}
+              >
+                <input
+                  type="color"
+                  className="cat-col-color"
+                  value={cat.color ?? '#888888'}
+                  onChange={(e) => updateCat(i, { color: e.target.value })}
+                  title="Color principal"
+                />
+                <span
+                  className="cat-col-value"
+                  title={cat.value == null ? '(buit)' : String(cat.value)}
+                >
+                  {cat.value == null ? '—' : String(cat.value)}
+                </span>
+                <input
+                  type="text"
+                  className="cat-col-label"
+                  value={cat.label}
+                  onChange={(e) => updateCat(i, { label: e.target.value })}
+                  placeholder="Etiqueta…"
+                />
+                <span className="cat-col-count">{cat.count || ''}</span>
+                <input
+                  type="checkbox"
+                  className="cat-col-vis"
+                  checked={cat.visible !== false}
+                  onChange={(e) => updateCat(i, { visible: e.target.checked })}
+                  title="Visible al mapa"
+                />
+                <input
+                  type="checkbox"
+                  className="cat-col-leg"
+                  checked={cat.legendVisible !== false}
+                  onChange={(e) => updateCat(i, { legendVisible: e.target.checked })}
+                  title="Visible a la llegenda"
+                />
+                <span className="cat-col-order">
+                  <button
+                    type="button"
+                    onClick={() => moveCategory(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Pujar"
+                  >↑</button>
+                  <button
+                    type="button"
+                    onClick={() => moveCategory(i, 1)}
+                    disabled={i === categories.length - 1}
+                    aria-label="Baixar"
+                  >↓</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Per-feature sample verification */}
+      {sampleRows && sampleRows.length > 0 ? (
+        <div className="catdiag-sample">
+          <p className="catdiag-dist-title">Verificació feature↔categoria:</p>
+          {sampleRows.map(({ i, raw, found }) => (
+            <div key={i} className="catdiag-sample-row">
+              <span className="catdiag-sample-idx">[{i}]</span>
+              <code className="catdiag-sample-val">
+                {raw == null ? 'null' : JSON.stringify(raw)}
+              </code>
+              <span className={found ? 'catdiag-ok' : 'catdiag-miss'}>
+                {found ? '✓' : '✗ sense categoria'}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Legend settings */}
+      {categories.length > 0 ? (
+        <div className="cat-legend-section">
+          <p className="catdiag-dist-title">Llegenda</p>
+          <label className="cat-legend-row">
+            Títol
+            <input
+              type="text"
+              value={legend.title ?? ''}
+              onChange={(e) => onLayerLegendChange?.(layer.id, { title: e.target.value })}
+              placeholder="Títol de la llegenda…"
+            />
+          </label>
+          <label className="cat-legend-row cat-legend-row--check">
+            <input
+              type="checkbox"
+              checked={legend.showCounts !== false}
+              onChange={(e) => onLayerLegendChange?.(layer.id, { showCounts: e.target.checked })}
+            />
+            Mostrar recomptes
+          </label>
+          <label className="cat-legend-row">
+            Ordre
+            <select
+              value={legend.orderMode ?? 'manual'}
+              onChange={(e) => onLayerLegendChange?.(layer.id, { orderMode: e.target.value })}
+            >
+              <option value="manual">Manual</option>
+              <option value="alpha">Alfabètic</option>
+              <option value="count">Per recompte</option>
+            </select>
+          </label>
+          <label className="cat-legend-row cat-legend-row--check">
+            <input
+              type="checkbox"
+              checked={legend.visible !== false}
+              onChange={(e) => onLayerLegendChange?.(layer.id, { visible: e.target.checked })}
+            />
+            Visible en exportació
+          </label>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function resolvePointSize(style, defaultSize) {
   if (style?.size != null) return Number(style.size)
   if (style?.radius != null) return Number(style.radius) * 2
@@ -40,6 +377,7 @@ function GeomSymbol({ type, color, size = 16 }) {
   return null
 }
 
+// ─── LayerInspector ───────────────────────────────────────────────────────────
 
 function LayerInspector({
   layer,
@@ -49,6 +387,9 @@ function LayerInspector({
   focusMask = null,
   onRenameLayer,
   onLayerStyleChange,
+  onLayerStyleModeChange,
+  onLayerCategoricalChange,
+  onLayerLegendChange,
   onMoveLayerUp,
   onMoveLayerDown,
   onExportLayerGeoJSON,
@@ -134,266 +475,288 @@ function LayerInspector({
           ) : null}
         </div>
 
+        {/* Estil section */}
         <div className="inspector-section">
           <p className="inspector-section-title">Estil</p>
-          <div className="layer-style-editor">
-            {layer.geometryType === 'point' ? (
-              <>
-                {/* Marker type */}
-                <label>
-                  Tipus de marcador
-                  <select
-                    value={layerStyle.markerType ?? 'circle'}
-                    onChange={(e) => {
-                      const nextType = e.target.value
-                      if (nextType === 'icon-circle') {
-                        onLayerStyleChange?.(layer.id, {
-                          markerType: 'icon-circle',
-                          size: 40,
-                          strokeColor: '#ffffff',
-                          strokeWidth: 3,
-                          iconColor: '#ffffff',
-                        })
-                      } else {
-                        onLayerStyleChange?.(layer.id, { markerType: nextType })
-                      }
-                    }}
-                  >
-                    <option value="circle">Cercle</option>
-                    <option value="icon-circle">Cercle amb icona</option>
-                  </select>
-                </label>
 
-                {/* Icon picker — only for icon-circle */}
-                {(layerStyle.markerType ?? 'circle') === 'icon-circle' ? (
-                  <>
-                    <p className="icon-picker-label">Icona</p>
-                    <IconPicker
-                      selectedIconId={layerStyle.icon ?? null}
-                      onSelect={(iconId) =>
-                        onLayerStyleChange?.(layer.id, { icon: iconId, iconSet: 'fa' })
-                      }
-                    />
-                    <label>
-                      Color icona
-                      <input
-                        type="color"
-                        value={layerStyle.iconColor ?? '#ffffff'}
-                        onChange={(e) =>
-                          onLayerStyleChange?.(layer.id, { iconColor: e.target.value })
+          {/* Mode selector — only for source layers */}
+          {layer.type === 'source' ? (
+            <div className="layer-style-editor">
+              <label>
+                Mode d'estil
+                <select
+                  value={layer.styleMode ?? 'single'}
+                  onChange={(e) => onLayerStyleModeChange?.(layer.id, e.target.value)}
+                >
+                  <option value="single">Estil únic</option>
+                  <option value="categorical">Per atribut</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          {/* Categorical editor or single-style editor */}
+          {layer.styleMode === 'categorical' ? (
+            <div className="layer-style-editor">
+              <CategoricalStyleEditor
+                layer={layer}
+                onLayerCategoricalChange={onLayerCategoricalChange}
+                onLayerLegendChange={onLayerLegendChange}
+              />
+            </div>
+          ) : (
+            <div className="layer-style-editor">
+              {layer.geometryType === 'point' ? (
+                <>
+                  <label>
+                    Tipus de marcador
+                    <select
+                      value={layerStyle.markerType ?? 'circle'}
+                      onChange={(e) => {
+                        const nextType = e.target.value
+                        if (nextType === 'icon-circle') {
+                          onLayerStyleChange?.(layer.id, {
+                            markerType: 'icon-circle',
+                            size: 40,
+                            strokeColor: '#ffffff',
+                            strokeWidth: 3,
+                            iconColor: '#ffffff',
+                          })
+                        } else {
+                          onLayerStyleChange?.(layer.id, { markerType: nextType })
+                        }
+                      }}
+                    >
+                      <option value="circle">Cercle</option>
+                      <option value="icon-circle">Cercle amb icona</option>
+                    </select>
+                  </label>
+
+                  {(layerStyle.markerType ?? 'circle') === 'icon-circle' ? (
+                    <>
+                      <p className="icon-picker-label">Icona</p>
+                      <IconPicker
+                        selectedIconId={layerStyle.icon ?? null}
+                        onSelect={(iconId) =>
+                          onLayerStyleChange?.(layer.id, { icon: iconId, iconSet: 'fa' })
                         }
                       />
-                    </label>
-                  </>
-                ) : null}
+                      <label>
+                        Color icona
+                        <input
+                          type="color"
+                          value={layerStyle.iconColor ?? '#ffffff'}
+                          onChange={(e) =>
+                            onLayerStyleChange?.(layer.id, { iconColor: e.target.value })
+                          }
+                        />
+                      </label>
+                    </>
+                  ) : null}
 
-                {/* Size (diameter) */}
-                <label>
-                  Mida
-                  <input
-                    type="number"
-                    min="6"
-                    max="60"
-                    value={resolvePointSize(layerStyle, (layerStyle.markerType ?? 'circle') === 'icon-circle' ? 28 : 14)}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { size: Number(e.target.value) || 14 })
-                    }
-                  />
-                </label>
+                  <label>
+                    Mida
+                    <input
+                      type="number"
+                      min="6"
+                      max="60"
+                      value={resolvePointSize(layerStyle, (layerStyle.markerType ?? 'circle') === 'icon-circle' ? 28 : 14)}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { size: Number(e.target.value) || 14 })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Color interior
+                    <input
+                      type="color"
+                      value={layerStyle.fillColor ?? '#d4335b'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Opacitat interior
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={layerStyle.fillOpacity ?? 0.9}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Color contorn
+                    <input
+                      type="color"
+                      value={layerStyle.strokeColor ?? '#d4335b'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Gruix contorn
+                    <input
+                      type="number"
+                      min="0"
+                      max="12"
+                      value={layerStyle.strokeWidth ?? 2}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Opacitat contorn
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={layerStyle.strokeOpacity ?? 1}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                </>
+              ) : null}
 
-                {/* Fill */}
-                <label>
-                  Color interior
-                  <input
-                    type="color"
-                    value={layerStyle.fillColor ?? '#d4335b'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Opacitat interior
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layerStyle.fillOpacity ?? 0.9}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
+              {layer.geometryType === 'line' ? (
+                <>
+                  <label>
+                    Color
+                    <input
+                      type="color"
+                      value={layerStyle.color ?? '#ea8b1f'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { color: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Gruix
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={layerStyle.width ?? 3}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { width: Number(e.target.value) || 1 })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Opacitat
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={layerStyle.opacity ?? 1}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { opacity: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Tipus de línia
+                    <select
+                      value={layerStyle.dashStyle ?? 'solid'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
+                      }
+                    >
+                      <option value="solid">Solid</option>
+                      <option value="dashed">Dashed</option>
+                      <option value="dotted">Dotted</option>
+                    </select>
+                  </label>
+                </>
+              ) : null}
 
-                {/* Stroke */}
-                <label>
-                  Color contorn
-                  <input
-                    type="color"
-                    value={layerStyle.strokeColor ?? '#d4335b'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Gruix contorn
-                  <input
-                    type="number"
-                    min="0"
-                    max="12"
-                    value={layerStyle.strokeWidth ?? 2}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
-                    }
-                  />
-                </label>
-                <label>
-                  Opacitat contorn
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layerStyle.strokeOpacity ?? 1}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              </>
-            ) : null}
-
-            {layer.geometryType === 'line' ? (
-              <>
-                <label>
-                  Color
-                  <input
-                    type="color"
-                    value={layerStyle.color ?? '#ea8b1f'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { color: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Gruix
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={layerStyle.width ?? 3}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { width: Number(e.target.value) || 1 })
-                    }
-                  />
-                </label>
-                <label>
-                  Opacitat
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layerStyle.opacity ?? 1}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { opacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  Tipus de línia
-                  <select
-                    value={layerStyle.dashStyle ?? 'solid'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
-                    }
-                  >
-                    <option value="solid">Solid</option>
-                    <option value="dashed">Dashed</option>
-                    <option value="dotted">Dotted</option>
-                  </select>
-                </label>
-              </>
-            ) : null}
-
-            {layer.geometryType === 'polygon' ? (
-              <>
-                <label>
-                  Color vora
-                  <input
-                    type="color"
-                    value={layerStyle.strokeColor ?? '#2f7de1'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Gruix vora
-                  <input
-                    type="number"
-                    min="0"
-                    max="20"
-                    value={layerStyle.strokeWidth ?? 2}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
-                    }
-                  />
-                </label>
-                <label>
-                  Opacitat vora
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layerStyle.strokeOpacity ?? 1}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  Color interior
-                  <input
-                    type="color"
-                    value={layerStyle.fillColor ?? '#2f7de1'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Opacitat interior
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layerStyle.fillOpacity ?? 0.18}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  Tipus de vora
-                  <select
-                    value={layerStyle.dashStyle ?? 'solid'}
-                    onChange={(e) =>
-                      onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
-                    }
-                  >
-                    <option value="solid">Solid</option>
-                    <option value="dashed">Dashed</option>
-                    <option value="dotted">Dotted</option>
-                  </select>
-                </label>
-              </>
-            ) : null}
-          </div>
+              {layer.geometryType === 'polygon' ? (
+                <>
+                  <label>
+                    Color vora
+                    <input
+                      type="color"
+                      value={layerStyle.strokeColor ?? '#2f7de1'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Gruix vora
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={layerStyle.strokeWidth ?? 2}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Opacitat vora
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={layerStyle.strokeOpacity ?? 1}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Color interior
+                    <input
+                      type="color"
+                      value={layerStyle.fillColor ?? '#2f7de1'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Opacitat interior
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={layerStyle.fillOpacity ?? 0.18}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Tipus de vora
+                    <select
+                      value={layerStyle.dashStyle ?? 'solid'}
+                      onChange={(e) =>
+                        onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
+                      }
+                    >
+                      <option value="solid">Solid</option>
+                      <option value="dashed">Dashed</option>
+                      <option value="dotted">Dotted</option>
+                    </select>
+                  </label>
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {layer.geometryType === 'polygon' ? (

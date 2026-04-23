@@ -52,6 +52,11 @@ import { createDatasetFromSource } from './modules/sources/createDataset'
 import { storeSourceFeatures, removeSource, removeDataset } from './modules/sources/sourceStore'
 import { readShapefileZip } from './modules/sources/readShapefileZip'
 import { openGpkgFile } from './modules/sources/readGpkg'
+import {
+  generateCategoriesFromDataset,
+  applyPaletteToCategories,
+  normalizeCategory,
+} from './modules/sources/categoricalStyle'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -759,6 +764,13 @@ function App() {
       meta: {
         totalFeatureCount: meta.featureCount,
         loadedFeatureCount: dataset.featureCount,
+        fields: meta.fields ?? [],
+      },
+      legend: {
+        title: importName,
+        showCounts: false,
+        orderMode: 'manual',
+        visible: true,
       },
     }
 
@@ -983,6 +995,41 @@ function App() {
 
         return { ...layer, style: nextStyle }
       }),
+    )
+  }
+
+  const handleLayerStyleModeChange = (layerId, mode) => {
+    setLayers((prev) => prev.map((l) => (l.id !== layerId ? l : { ...l, styleMode: mode })))
+  }
+
+  const handleLayerCategoricalChange = (layerId, partial) => {
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id !== layerId) return l
+        if (partial._generate) {
+          const generated = generateCategoriesFromDataset(
+            l.datasetId,
+            partial.field,
+            partial.paletteId ?? 'default',
+          )
+          return { ...l, categorical: { field: partial.field, categories: generated } }
+        }
+        if (partial._applyPalette) {
+          const current = (l.categorical?.categories ?? []).map(normalizeCategory)
+          const next = applyPaletteToCategories(current, partial.paletteId, partial.invert ?? false)
+          return { ...l, categorical: { ...(l.categorical ?? {}), categories: next } }
+        }
+        const { _generate: _g, _applyPalette: _ap, ...rest } = partial
+        return { ...l, categorical: { ...(l.categorical ?? {}), ...rest } }
+      }),
+    )
+  }
+
+  const handleLayerLegendChange = (layerId, partialLegend) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id !== layerId ? l : { ...l, legend: { ...(l.legend ?? {}), ...partialLegend } },
+      ),
     )
   }
 
@@ -1540,6 +1587,9 @@ function App() {
             focusMask={focusMask}
             onRenameLayer={handleRenameLayer}
             onLayerStyleChange={handleLayerStyleChange}
+            onLayerStyleModeChange={handleLayerStyleModeChange}
+            onLayerCategoricalChange={handleLayerCategoricalChange}
+            onLayerLegendChange={handleLayerLegendChange}
             onMoveLayerUp={handleMoveLayerUp}
             onMoveLayerDown={handleMoveLayerDown}
             onExportLayerGeoJSON={handleExportLayerGeoJSON}

@@ -20,6 +20,7 @@ import { getTablerIconSvgContent } from '../icons/tablerIconResolver'
 import { resolveFaIcon } from '../icons/faIconResolver'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { filterByViewportBbox } from '../modules/sources/bboxFilter'
+import { leafletStyleForCategory } from '../modules/sources/categoricalStyle'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -261,6 +262,25 @@ function getOuterRings(latlngs) {
   return [latlngs]
 }
 
+function getLayerStyleSignature(layer) {
+  if (layer.styleMode === 'categorical' && layer.categorical?.field) {
+    const { field, categories = [] } = layer.categorical
+    // Include color, visibility and legend order so any edit triggers remount
+    const colorStr = categories
+      .map((c) => `${c.value}:${c.color ?? c.style?.color ?? ''}:${c.visible !== false ? 1 : 0}`)
+      .join('|')
+    return `cat:${field}:${colorStr}`
+  }
+  const s = layer.style ?? {}
+  if (layer.geometryType === 'polygon') {
+    return `s:${s.strokeColor}:${s.strokeWidth}:${s.strokeOpacity}:${s.fillColor}:${s.fillOpacity}:${s.dashStyle}`
+  }
+  if (layer.geometryType === 'line') {
+    return `s:${s.color}:${s.width}:${s.opacity}:${s.dashStyle}`
+  }
+  return `s:${s.fillColor}:${s.fillOpacity}:${s.strokeColor}:${s.strokeWidth}:${s.size}`
+}
+
 function SourceLayerRenderer({ layer, pane }) {
   const map = useMap()
   const [moveCount, setMoveCount] = useState(0)
@@ -279,31 +299,57 @@ function SourceLayerRenderer({ layer, pane }) {
     return { type: 'FeatureCollection', features: visible }
   }, [layer.datasetId, moveCount, map])
 
-  const styleForLayer = useMemo(() => {
-    const s = layer.style || {}
-    if (layer.geometryType === 'polygon') {
-      return {
-        color: s.strokeColor || layer.color || '#2f7de1',
-        weight: s.strokeWidth ?? 2,
-        opacity: s.strokeOpacity ?? 1,
-        fillColor: s.fillColor || layer.color || '#2f7de1',
-        fillOpacity: s.fillOpacity ?? 0.18,
-        dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
-      }
+  const isCategorical = layer.styleMode === 'categorical' && !!layer.categorical?.field
+
+  const categoryMap = useMemo(() => {
+    if (!isCategorical) return null
+    const m = new Map()
+    for (const cat of layer.categorical.categories ?? []) {
+      const key = cat.value == null ? '__null__' : String(cat.value)
+      m.set(key, cat)
     }
-    if (layer.geometryType === 'line') {
-      return {
-        color: s.color || layer.color || '#ea8b1f',
-        weight: s.width || 3,
-        opacity: s.opacity ?? 1,
-        dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+    return m
+  }, [isCategorical, layer.categorical])
+
+  const getFeatureStyle = useCallback(
+    (feature) => {
+      if (isCategorical && categoryMap) {
+        const val = feature?.properties?.[layer.categorical.field]
+        const key = val == null ? '__null__' : String(val)
+        return leafletStyleForCategory(categoryMap.get(key), layer.geometryType)
       }
-    }
-    return {}
-  }, [layer])
+      const s = layer.style || {}
+      if (layer.geometryType === 'polygon') {
+        return {
+          color: s.strokeColor || layer.color || '#2f7de1',
+          weight: s.strokeWidth ?? 2,
+          opacity: s.strokeOpacity ?? 1,
+          fillColor: s.fillColor || layer.color || '#2f7de1',
+          fillOpacity: s.fillOpacity ?? 0.18,
+          dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+        }
+      }
+      if (layer.geometryType === 'line') {
+        return {
+          color: s.color || layer.color || '#ea8b1f',
+          weight: s.width || 3,
+          opacity: s.opacity ?? 1,
+          dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+        }
+      }
+      return {}
+    },
+    [isCategorical, categoryMap, layer],
+  )
 
   const pointToLayer = useCallback(
     (feature, latlng) => {
+      if (isCategorical && categoryMap) {
+        const val = feature?.properties?.[layer.categorical.field]
+        const key = val == null ? '__null__' : String(val)
+        const opts = leafletStyleForCategory(categoryMap.get(key), 'point')
+        return L.circleMarker(latlng, opts)
+      }
       const s = layer.style || {}
       const radius = s.size ? Math.max(1, s.size / 2) : 6
       return L.circleMarker(latlng, {
@@ -315,16 +361,16 @@ function SourceLayerRenderer({ layer, pane }) {
         opacity: s.strokeOpacity ?? 1,
       })
     },
-    [layer],
+    [isCategorical, categoryMap, layer],
   )
 
   if (!geojsonData.features.length) return null
 
   return (
     <GeoJSON
-      key={`src-${layer.id}-${moveCount}`}
+      key={`src-${layer.id}-${moveCount}-${getLayerStyleSignature(layer)}`}
       data={geojsonData}
-      style={() => styleForLayer}
+      style={getFeatureStyle}
       pointToLayer={pointToLayer}
       pane={pane}
       interactive={false}
