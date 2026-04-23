@@ -5,6 +5,7 @@ export function buildProjectData({
   editableLayerId,
   layers,
   groups,
+  projectPalettes = [],
 }) {
   return {
     version: 1,
@@ -16,6 +17,7 @@ export function buildProjectData({
       editableLayerId,
       layers,
       groups: Array.isArray(groups) ? groups : [],
+      palettes: projectPalettes,
     },
   }
 }

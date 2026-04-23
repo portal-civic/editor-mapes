@@ -26,3 +26,21 @@ export function normalizeImportedGroups(groups) {
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')
     .map((g) => ({ id: g.id, name: g.name }))
 }
+
+export function normalizeImportedPalettes(palettes) {
+  if (!Array.isArray(palettes)) return []
+  return palettes
+    .filter(
+      (p) =>
+        p &&
+        typeof p.id === 'string' &&
+        typeof p.name === 'string' &&
+        Array.isArray(p.colors),
+    )
+    .map((p) => ({
+      id: p.id,
+      name: String(p.name),
+      colors: p.colors.filter((c) => typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)),
+    }))
+    .filter((p) => p.colors.length > 0)
+}

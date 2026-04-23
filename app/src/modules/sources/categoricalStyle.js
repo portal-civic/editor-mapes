@@ -23,9 +23,10 @@ export function normalizeCategory(cat, index) {
 
 // ─── Generation ───────────────────────────────────────────────────────────────
 
-export function generateCategoriesFromDataset(datasetId, field, paletteId = 'default') {
+export function generateCategoriesFromDataset(datasetId, field, paletteId = 'default', paletteMap = null) {
   const features = getDatasetFeatures(datasetId) ?? []
-  const palette = PALETTES[paletteId]?.colors ?? PALETTES.default.colors
+  const resolved = paletteMap ?? PALETTES
+  const palette = resolved[paletteId]?.colors ?? PALETTES.default.colors
 
   const counts = new Map()
   for (const f of features) {
@@ -53,8 +54,9 @@ export function generateCategoriesFromDataset(datasetId, field, paletteId = 'def
 
 // ─── Palette application ──────────────────────────────────────────────────────
 
-export function applyPaletteToCategories(categories, paletteId, invert = false) {
-  const base = PALETTES[paletteId]?.colors ?? PALETTES.default.colors
+export function applyPaletteToCategories(categories, paletteId, invert = false, paletteMap = null) {
+  const resolved = paletteMap ?? PALETTES
+  const base = resolved[paletteId]?.colors ?? PALETTES.default.colors
   const palette = invert ? [...base].reverse() : base
   return categories.map((cat, i) => ({
     ...normalizeCategory(cat, i),

@@ -6,7 +6,7 @@ import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
 
-function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange }) {
+function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange, projectPalettes = [], onManagePalettes }) {
   const fields = layer.meta?.fields ?? []
   const categorical = layer.categorical ?? {}
   const field = categorical.field ?? ''
@@ -147,10 +147,25 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
             value={selectedPaletteId}
             onChange={(e) => setSelectedPaletteId(e.target.value)}
           >
-            {PALETTE_ORDER.map((id) => (
-              <option key={id} value={id}>{PALETTES[id].name}</option>
-            ))}
+            <optgroup label="Sistema">
+              {PALETTE_ORDER.map((id) => (
+                <option key={id} value={id}>{PALETTES[id].name}</option>
+              ))}
+            </optgroup>
+            {projectPalettes.length > 0 && (
+              <optgroup label="Projecte">
+                {projectPalettes.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
+          <button
+            type="button"
+            className="cat-palette-btn"
+            title="Gestionar paletes del projecte"
+            onClick={onManagePalettes}
+          >⚙</button>
           <button
             type="button"
             className="cat-palette-btn"
@@ -390,6 +405,8 @@ function LayerInspector({
   onLayerStyleModeChange,
   onLayerCategoricalChange,
   onLayerLegendChange,
+  projectPalettes = [],
+  onManagePalettes,
   onMoveLayerUp,
   onMoveLayerDown,
   onExportLayerGeoJSON,
@@ -502,6 +519,8 @@ function LayerInspector({
                 layer={layer}
                 onLayerCategoricalChange={onLayerCategoricalChange}
                 onLayerLegendChange={onLayerLegendChange}
+                projectPalettes={projectPalettes}
+                onManagePalettes={onManagePalettes}
               />
             </div>
           ) : (

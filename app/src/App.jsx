@@ -9,6 +9,7 @@ import GeoJsonImportDialog from './components/GeoJsonImportDialog'
 import SourceImportDialog from './components/SourceImportDialog'
 import ShapefileLayerSelectDialog from './components/ShapefileLayerSelectDialog'
 import GpkgLayerSelectDialog from './components/GpkgLayerSelectDialog'
+import PaletteManagerDialog from './components/PaletteManagerDialog'
 import BearingControls from './components/BearingControls'
 import useMapExport from './hooks/useMapExport'
 import {
@@ -29,6 +30,7 @@ import {
   isValidProjectData,
   normalizeImportedLayers,
   normalizeImportedGroups,
+  normalizeImportedPalettes,
   downloadWebProject,
 } from './modules/project'
 import { buildLayerSVG } from './modules/export/exportSVG'
@@ -57,6 +59,7 @@ import {
   applyPaletteToCategories,
   normalizeCategory,
 } from './modules/sources/categoricalStyle'
+import { PALETTES } from './modules/styles/palettes'
 import { buildLegendEntries } from './modules/legend/buildLegendEntries'
 
 function isValidBasemapId(basemapId) {
@@ -110,6 +113,9 @@ function App() {
   const [pendingShapefileSelect, setPendingShapefileSelect] = useState(null)
   // pendingGpkgLayers = { layers, warnings, fileName } | null  (multi-layer GPKG)
   const [pendingGpkgLayers, setPendingGpkgLayers] = useState(null)
+  // projectPalettes: user-defined palettes, exported with the project
+  const [projectPalettes, setProjectPalettes] = useState([])
+  const [showPaletteManager, setShowPaletteManager] = useState(false)
 
   const selectedBasemap = useMemo(
     () =>
@@ -209,6 +215,12 @@ function App() {
   )
 
   const legendEntries = useMemo(() => buildLegendEntries(layers), [layers])
+
+  const allPalettes = useMemo(() => {
+    const map = { ...PALETTES }
+    for (const p of projectPalettes) map[p.id] = { name: p.name, colors: p.colors }
+    return map
+  }, [projectPalettes])
 
   const editableLayer = useMemo(
     () => vectorLayers.find((l) => l.id === editableLayerId) ?? null,
@@ -430,6 +442,7 @@ function App() {
       editableLayerId,
       layers,
       groups,
+      projectPalettes,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
     const blob = new Blob([jsonContent], { type: 'application/json' })
@@ -637,6 +650,7 @@ function App() {
 
       setLayers(normalizeImportedLayers(importedProject.layers))
       setGroups(normalizeImportedGroups(importedProject.groups))
+      setProjectPalettes(normalizeImportedPalettes(importedProject.palettes))
       setBearing(typeof importedProject.mapView?.bearing === 'number' ? importedProject.mapView.bearing : 0)
       // Support new format (editableLayerId) and old format (activePointLayerId etc.)
       setEditableLayerId(
@@ -1095,12 +1109,13 @@ function App() {
             l.datasetId,
             partial.field,
             partial.paletteId ?? 'default',
+            allPalettes,
           )
           return { ...l, categorical: { field: partial.field, categories: generated } }
         }
         if (partial._applyPalette) {
           const current = (l.categorical?.categories ?? []).map(normalizeCategory)
-          const next = applyPaletteToCategories(current, partial.paletteId, partial.invert ?? false)
+          const next = applyPaletteToCategories(current, partial.paletteId, partial.invert ?? false, allPalettes)
           return { ...l, categorical: { ...(l.categorical ?? {}), categories: next } }
         }
         const { _generate: _g, _applyPalette: _ap, ...rest } = partial
@@ -1548,6 +1563,13 @@ function App() {
           onCancel={handleGpkgLayerSelectCancel}
         />
       ) : null}
+      {showPaletteManager ? (
+        <PaletteManagerDialog
+          palettes={projectPalettes}
+          onChange={setProjectPalettes}
+          onClose={() => setShowPaletteManager(false)}
+        />
+      ) : null}
       <TopBar
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
@@ -1675,6 +1697,8 @@ function App() {
             onLayerStyleModeChange={handleLayerStyleModeChange}
             onLayerCategoricalChange={handleLayerCategoricalChange}
             onLayerLegendChange={handleLayerLegendChange}
+            projectPalettes={projectPalettes}
+            onManagePalettes={() => setShowPaletteManager(true)}
             onMoveLayerUp={handleMoveLayerUp}
             onMoveLayerDown={handleMoveLayerDown}
             onExportLayerGeoJSON={handleExportLayerGeoJSON}

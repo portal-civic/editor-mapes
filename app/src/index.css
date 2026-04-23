@@ -1422,6 +1422,249 @@ button.primary {
   border-top: 1px solid #e8ecf1;
 }
 
+/* ─── Palette manager dialog ────────────────────────────────────── */
+
+.palmgr-panel {
+  width: 500px;
+}
+
+.palmgr-body {
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 0;
+  padding: 0;
+}
+
+.palmgr-section {
+  padding: 14px 20px 10px;
+}
+
+.palmgr-section + .palmgr-section {
+  border-top: 1px solid #e8ecf1;
+}
+
+.palmgr-section--presets {
+  background: #f8fafc;
+}
+
+.palmgr-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.palmgr-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.palmgr-new-btn {
+  padding: 5px 12px;
+  border: 1px solid #0f4c81;
+  border-radius: 6px;
+  background: #f0f7ff;
+  color: #0f4c81;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.palmgr-new-btn:hover {
+  background: #dbeafe;
+}
+
+.palmgr-empty {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  padding: 8px 0 4px;
+  margin: 0;
+}
+
+.palmgr-card {
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.palmgr-card--preset {
+  background: transparent;
+  border-color: #e8ecf1;
+}
+
+.palmgr-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.palmgr-card-name {
+  flex: 1;
+  border: 1px solid #d1d9e0;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #243244;
+  background: #fff;
+  outline: none;
+}
+
+.palmgr-card-name:focus {
+  border-color: #0f4c81;
+  box-shadow: 0 0 0 2px rgba(15, 76, 129, 0.1);
+}
+
+.palmgr-card-preset-name {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7a8d;
+}
+
+.palmgr-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.palmgr-card-btn {
+  padding: 3px 8px;
+  border: 1px solid #d1d9e0;
+  border-radius: 5px;
+  background: #f8fafc;
+  font-size: 0.8rem;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.palmgr-card-btn:hover {
+  background: #e8ecf1;
+}
+
+.palmgr-card-btn--del {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
+.palmgr-card-btn--del:hover {
+  background: #fee2e2;
+}
+
+.palmgr-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 7px;
+}
+
+.palmgr-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.palmgr-expand-btn {
+  border: none;
+  background: none;
+  font-size: 0.775rem;
+  color: #0f4c81;
+  cursor: pointer;
+  padding: 0;
+}
+
+.palmgr-expand-btn:hover {
+  text-decoration: underline;
+}
+
+.palmgr-color-editor {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e3e8ef;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.palmgr-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.palmgr-color-input {
+  width: 28px;
+  height: 28px;
+  padding: 1px;
+  border: 1px solid #d1d9e0;
+  border-radius: 5px;
+  cursor: pointer;
+  background: none;
+}
+
+.palmgr-color-hex {
+  flex: 1;
+  font-size: 0.78rem;
+  font-family: monospace;
+  color: #6b7a8d;
+}
+
+.palmgr-color-btn {
+  padding: 2px 7px;
+  border: 1px solid #d1d9e0;
+  border-radius: 5px;
+  background: #f8fafc;
+  font-size: 0.75rem;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.palmgr-color-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.palmgr-color-btn:not(:disabled):hover {
+  background: #e8ecf1;
+}
+
+.palmgr-color-btn--del {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
+.palmgr-color-btn--del:not(:disabled):hover {
+  background: #fee2e2;
+}
+
+.palmgr-add-color-btn {
+  border: 1px dashed #94a3b8;
+  border-radius: 5px;
+  background: none;
+  color: #64748b;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.palmgr-add-color-btn:hover {
+  border-color: #0f4c81;
+  color: #0f4c81;
+  background: #f0f7ff;
+}
+
 /* ─── GPKG multi-select dialog ──────────────────────────────────── */
 
 .dialog-panel--tall {
