@@ -30,6 +30,8 @@ import {
 } from './modules/project'
 import { buildLayerSVG } from './modules/export/exportSVG'
 import { exportHybridPointLayer, exportAllVisibleLayers } from './modules/export/exportHybrid'
+import { exportPDFSimple } from './modules/export/exportPDF'
+import { exportBasemapHDPng } from './modules/export/exportBasemapHD'
 import {
   buildImportedLayersFromGeoJSON,
   normalizeGeoJSONInput,
@@ -419,6 +421,34 @@ function App() {
     }
   }
 
+  const handleExportPDFSimple = async () => {
+    if (!mapInstanceRef.current) {
+      window.alert("No s'ha trobat el mapa per exportar")
+      return
+    }
+    try {
+      await exportPDFSimple(mapInstanceRef.current, layers, selectedBasemap, focusMask)
+    } catch (err) {
+      window.alert(`No s'ha pogut exportar el PDF: ${err.message}`)
+    }
+  }
+
+  const handleExportBasemapHD = async (opts) => {
+    if (!mapInstanceRef.current) {
+      window.alert("No s'ha trobat el mapa per exportar")
+      return
+    }
+    if (!selectedBasemap || selectedBasemap.type !== 'xyz') {
+      window.alert("El basemap seleccionat no és compatible amb l'exportació HD (cal un basemap de teseles XYZ).")
+      return
+    }
+    try {
+      await exportBasemapHDPng(mapInstanceRef.current, selectedBasemap, opts)
+    } catch (err) {
+      window.alert(`No s'ha pogut exportar el basemap HD: ${err.message}`)
+    }
+  }
+
   const handleExportHybrid = async (layerId) => {
     const layer = layers.find((l) => l.id === layerId)
     if (!layer || layer.geometryType !== 'point') return
@@ -543,6 +573,7 @@ function App() {
 
   const handleMapReady = (map) => {
     mapInstanceRef.current = map
+    window.__debugMap = map // DEBUG TEMPORAL — eliminar després
   }
 
   const handleOpenProjectClick = () => {
@@ -1130,6 +1161,8 @@ function App() {
         onExportProject={handleExportProject}
         onExportWebProject={handleExportWebProject}
         onExportAllLayers={handleExportAllLayers}
+        onExportPDFSimple={handleExportPDFSimple}
+        onExportBasemapHD={handleExportBasemapHD}
       />
 
       <main className="workspace">

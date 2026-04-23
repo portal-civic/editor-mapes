@@ -92,12 +92,48 @@ export const basemapCatalog = [
     options: {},
   },
 
+  {
+    id: 'carto-positron-nolabels',
+    name: 'Carto Positron (sense etiquetes)',
+    type: 'xyz',
+    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    thumbnail: null,
+    minZoom: 0,
+    maxZoom: 20,
+    subdomains: 'abcd',
+    category: 'light',
+    default: false,
+    requiresApiKey: false,
+    apiKeyEnv: null,
+    options: {},
+  },
+
   // ── Dark ──────────────────────────────────────────────────
   {
     id: 'carto-dark',
     name: 'Carto Dark Matter',
     type: 'xyz',
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    thumbnail: null,
+    minZoom: 0,
+    maxZoom: 20,
+    subdomains: 'abcd',
+    category: 'dark',
+    default: false,
+    requiresApiKey: false,
+    apiKeyEnv: null,
+    options: {},
+  },
+
+  {
+    id: 'carto-darkmatter-nolabels',
+    name: 'Carto Dark Matter (sense etiquetes)',
+    type: 'xyz',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,

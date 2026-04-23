@@ -28,6 +28,8 @@ function TopBar({
   onExportProject,
   onExportWebProject,
   onExportAllLayers,
+  onExportPDFSimple,
+  onExportBasemapHD,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -38,6 +40,15 @@ function TopBar({
   const [exportTitle, setExportTitle] = useState('')
   const [showLegend, setShowLegend] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [hdWidth, setHdWidth] = useState('10000')
+  const [hdHeight, setHdHeight] = useState('')
+  const [hdZoomMode, setHdZoomMode] = useState('auto')
+  const [hdManualZoom, setHdManualZoom] = useState('17')
+
+  const basemapMaxZoom = useMemo(
+    () => basemapOptions.find((b) => b.id === selectedBasemapId)?.maxZoom ?? 19,
+    [basemapOptions, selectedBasemapId],
+  )
 
   const exportMenuRef = useRef(null)
 
@@ -337,6 +348,15 @@ function TopBar({
               >
                 Exportar capes visibles per a Affinity (prova)
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onExportPDFSimple?.()
+                  setShowExportMenu(false)
+                }}
+              >
+                Exportar PDF (prova)
+              </button>
               <div className="export-dropdown-divider" />
               <div className="export-dropdown-png">
                 <input
@@ -363,6 +383,84 @@ function TopBar({
                   }}
                 >
                   Exportar PNG
+                </button>
+              </div>
+              <div className="export-dropdown-divider" />
+              <div className="export-dropdown-hd">
+                <div className="export-dropdown-hd-row">
+                  <input
+                    type="number"
+                    className="topbar-hd-input"
+                    placeholder="Amplada px"
+                    value={hdWidth}
+                    onChange={(e) => setHdWidth(e.target.value)}
+                    min="100"
+                    max="30000"
+                  />
+                  <input
+                    type="number"
+                    className="topbar-hd-input"
+                    placeholder="Alçada px (opt.)"
+                    value={hdHeight}
+                    onChange={(e) => setHdHeight(e.target.value)}
+                    min="100"
+                    max="30000"
+                  />
+                </div>
+                <div className="export-dropdown-hd-mode">
+                  <label>
+                    <input
+                      type="radio"
+                      name="hdZoomMode"
+                      value="auto"
+                      checked={hdZoomMode === 'auto'}
+                      onChange={() => setHdZoomMode('auto')}
+                    />
+                    Automàtic
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="hdZoomMode"
+                      value="manual"
+                      checked={hdZoomMode === 'manual'}
+                      onChange={() => {
+                        setHdZoomMode('manual')
+                        setHdManualZoom(String(basemapMaxZoom))
+                      }}
+                    />
+                    Manual
+                  </label>
+                </div>
+                {hdZoomMode === 'manual' && (
+                  <div className="export-dropdown-hd-zoom">
+                    <label>
+                      Zoom XYZ:
+                      <input
+                        type="number"
+                        className="topbar-hd-input"
+                        value={hdManualZoom}
+                        onChange={(e) => setHdManualZoom(e.target.value)}
+                        min="1"
+                        max={basemapMaxZoom}
+                      />
+                    </label>
+                    <span className="topbar-hd-hint">màx: {basemapMaxZoom}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onExportBasemapHD?.({
+                      targetWidth: parseInt(hdWidth) || 10000,
+                      targetHeight: hdHeight ? parseInt(hdHeight) : null,
+                      maxQuality: hdZoomMode === 'auto',
+                      manualZoom: hdZoomMode === 'manual' ? parseInt(hdManualZoom) || 17 : null,
+                    })
+                    setShowExportMenu(false)
+                  }}
+                >
+                  Exportar basemap HD PNG
                 </button>
               </div>
             </div>
