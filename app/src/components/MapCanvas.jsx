@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet-rotate'
 import {
@@ -18,6 +18,8 @@ import { getTileLayerProps } from '../modules/maps'
 import { resolveIcon } from '../modules/layers'
 import { getTablerIconSvgContent } from '../icons/tablerIconResolver'
 import { resolveFaIcon } from '../icons/faIconResolver'
+import { getDatasetFeatures } from '../modules/sources/sourceStore'
+import { filterByViewportBbox } from '../modules/sources/bboxFilter'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -259,6 +261,77 @@ function getOuterRings(latlngs) {
   return [latlngs]
 }
 
+function SourceLayerRenderer({ layer, pane }) {
+  const map = useMap()
+  const [moveCount, setMoveCount] = useState(0)
+
+  useMapEvents({
+    moveend() {
+      setMoveCount((n) => n + 1)
+    },
+  })
+
+  const geojsonData = useMemo(() => {
+    const bounds = map.getBounds()
+    const viewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+    const allFeatures = getDatasetFeatures(layer.datasetId)
+    const visible = filterByViewportBbox(allFeatures, viewport)
+    return { type: 'FeatureCollection', features: visible }
+  }, [layer.datasetId, moveCount, map])
+
+  const styleForLayer = useMemo(() => {
+    const s = layer.style || {}
+    if (layer.geometryType === 'polygon') {
+      return {
+        color: s.strokeColor || layer.color || '#2f7de1',
+        weight: s.strokeWidth ?? 2,
+        opacity: s.strokeOpacity ?? 1,
+        fillColor: s.fillColor || layer.color || '#2f7de1',
+        fillOpacity: s.fillOpacity ?? 0.18,
+        dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+      }
+    }
+    if (layer.geometryType === 'line') {
+      return {
+        color: s.color || layer.color || '#ea8b1f',
+        weight: s.width || 3,
+        opacity: s.opacity ?? 1,
+        dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+      }
+    }
+    return {}
+  }, [layer])
+
+  const pointToLayer = useCallback(
+    (feature, latlng) => {
+      const s = layer.style || {}
+      const radius = s.size ? Math.max(1, s.size / 2) : 6
+      return L.circleMarker(latlng, {
+        radius,
+        fillColor: s.fillColor || layer.color || '#d4335b',
+        fillOpacity: s.fillOpacity ?? 0.9,
+        color: s.strokeColor || layer.color || '#d4335b',
+        weight: s.strokeWidth ?? 2,
+        opacity: s.strokeOpacity ?? 1,
+      })
+    },
+    [layer],
+  )
+
+  if (!geojsonData.features.length) return null
+
+  return (
+    <GeoJSON
+      key={`src-${layer.id}-${moveCount}`}
+      data={geojsonData}
+      style={() => styleForLayer}
+      pointToLayer={pointToLayer}
+      pane={pane}
+      interactive={false}
+    />
+  )
+}
+
 function MapCanvas({
   selectedBasemap,
   activeWorkModeId = 'select',
@@ -269,6 +342,7 @@ function MapCanvas({
   pointFeatures = [],
   lineFeatures = [],
   polygonFeatures = [],
+  sourceLayers = [],
   visibleLayerOrder = [],
   selectedMunicipalityGeometry = null,
   draftLinePoints = [],
@@ -523,6 +597,14 @@ function MapCanvas({
             interactive={false}
           />
         ) : null}
+
+        {sourceLayers.map((layer) => (
+          <SourceLayerRenderer
+            key={layer.id}
+            layer={layer}
+            pane={layerPanesById[layer.id]}
+          />
+        ))}
 
         {lineFeatures.map((lineFeature) => {
           const isSelected = isSelectedFeature(lineFeature)

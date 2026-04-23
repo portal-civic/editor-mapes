@@ -233,6 +233,14 @@ function LayersPanel({
               title="Doble clic per renombrar"
             >
               {layer.name}
+              {layer.type === 'source' ? (
+                <span
+                  className="layer-source-badge"
+                  title={`Font externa · ${(layer.meta?.loadedFeatureCount ?? 0).toLocaleString()} elements carregats`}
+                >
+                  FONT
+                </span>
+              ) : null}
             </span>
           )}
 

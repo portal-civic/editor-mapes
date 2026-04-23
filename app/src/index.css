@@ -1539,3 +1539,56 @@ button.primary {
   background: #fff;
   color: #243244;
 }
+
+/* ─── Source layer badge ────────────────────────────────────────── */
+
+.layer-source-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  vertical-align: middle;
+}
+
+/* ─── Source import dialog extras ───────────────────────────────── */
+
+.source-dialog-meta {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  color: #6b7a8d;
+}
+
+.source-dialog-warning {
+  margin: 6px 0 10px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.source-dialog-note {
+  margin: 10px 0 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.source-dialog-limit-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.source-dialog-limit-input {
+  width: 80px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  border: 1px solid #c8d0db;
+  border-radius: 5px;
+}

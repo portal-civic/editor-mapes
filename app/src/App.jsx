@@ -6,6 +6,8 @@ import MapToolbarSimple from './components/MapToolbarSimple'
 import FeatureInspector from './components/FeatureInspector'
 import LayerInspector from './components/LayerInspector'
 import GeoJsonImportDialog from './components/GeoJsonImportDialog'
+import SourceImportDialog from './components/SourceImportDialog'
+import ShapefileLayerSelectDialog from './components/ShapefileLayerSelectDialog'
 import BearingControls from './components/BearingControls'
 import useMapExport from './hooks/useMapExport'
 import {
@@ -44,6 +46,10 @@ import {
   getImportAreaFromGeoJSONGeometry,
 } from './modules/import/spatialFilter'
 import { IMPORT_MODES } from './modules/import/importOptions'
+import { readGeoJSONMeta } from './modules/sources/readGeoJSONMeta'
+import { createDatasetFromSource } from './modules/sources/createDataset'
+import { storeSourceFeatures, removeSource, removeDataset } from './modules/sources/sourceStore'
+import { readShapefileZip } from './modules/sources/readShapefileZip'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -52,6 +58,7 @@ function isValidBasemapId(basemapId) {
 function App() {
   const importInputRef = useRef(null)
   const importGeoJSONInputRef = useRef(null)
+  const importShapefileInputRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const { exportMapAsPNG } = useMapExport()
   const [layers, setLayers] = useState(() => {
@@ -83,6 +90,14 @@ function App() {
   const [groups, setGroups] = useState([])
   // bearing: map rotation in degrees (0 = north up)
   const [bearing, setBearing] = useState(0)
+  // sources = [{ id, type, fileName, meta }] — lightweight metadata only
+  const [sources, setSources] = useState([])
+  // datasets = [{ id, sourceId, featureCount, options }] — lightweight metadata only
+  const [datasets, setDatasets] = useState([])
+  // pendingSourceImport = { sourceId, fileName, meta, sourceType? } | null
+  const [pendingSourceImport, setPendingSourceImport] = useState(null)
+  // pendingShapefileSelect = { layers, warnings, zipName } | null  (multi-layer SHP)
+  const [pendingShapefileSelect, setPendingShapefileSelect] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -173,6 +188,11 @@ function App() {
           l.geometryType === 'line' ||
           l.geometryType === 'polygon',
       ),
+    [layers],
+  )
+
+  const visibleSourceLayers = useMemo(
+    () => layers.filter((l) => l.type === 'source' && l.visible),
     [layers],
   )
 
@@ -662,23 +682,157 @@ function App() {
     try {
       const fileContent = await selectedFile.text()
       const parsedData = JSON.parse(fileContent)
-      const normalizedFeatures = normalizeGeoJSONInput(parsedData)
+      const meta = readGeoJSONMeta(parsedData)
 
-      if (!normalizedFeatures) {
+      if (!meta) {
         window.alert('GeoJSON no vàlid')
         return
       }
 
-      setPendingGeoJSONImport({
-        parsedData,
+      const sourceId = `src-${Date.now()}-${Math.round(Math.random() * 10000)}`
+      storeSourceFeatures(sourceId, meta.rawFeatures)
+
+      setPendingSourceImport({
+        sourceId,
         fileName: selectedFile.name,
-        featureCount: normalizedFeatures.length,
+        meta: {
+          featureCount: meta.featureCount,
+          bbox: meta.bbox,
+          fields: meta.fields,
+          geometryType: meta.geometryType,
+        },
       })
     } catch {
       window.alert("No s'ha pogut llegir el fitxer GeoJSON")
     } finally {
       event.target.value = ''
     }
+  }
+
+  const handleSourceImportConfirm = (options) => {
+    if (!pendingSourceImport) return
+    const { sourceId, fileName, meta } = pendingSourceImport
+
+    const importOptions = {}
+    if (options.useViewport && mapInstanceRef.current) {
+      const bounds = mapInstanceRef.current.getBounds()
+      importOptions.viewport = [
+        bounds.getWest(), bounds.getSouth(),
+        bounds.getEast(), bounds.getNorth(),
+      ]
+    }
+    if (options.limit) importOptions.limit = options.limit
+
+    const dataset = createDatasetFromSource(sourceId, importOptions)
+
+    const sourceRecord = { id: sourceId, type: pendingSourceImport.sourceType ?? 'geojson', fileName, meta }
+    setSources((s) => [...s, sourceRecord])
+    setDatasets((d) => [...d, dataset])
+
+    const effectiveGeomType =
+      meta.geometryType === 'mixed' ? 'polygon' : meta.geometryType
+    const layerColor =
+      effectiveGeomType === 'polygon' ? '#2f7de1'
+        : effectiveGeomType === 'line' ? '#ea8b1f'
+        : '#d4335b'
+    const importName = fileName.replace(/\.(geo)?json$/i, '').trim() || 'Font'
+    const layerId = `src-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
+
+    const sourceLayer = {
+      id: layerId,
+      name: importName,
+      color: layerColor,
+      geometryType: effectiveGeomType,
+      visible: true,
+      legendLabel: importName,
+      style: getDefaultLayerStyle(effectiveGeomType, layerColor),
+      features: [],
+      type: 'source',
+      datasetId: dataset.id,
+      sourceId,
+      meta: {
+        totalFeatureCount: meta.featureCount,
+        loadedFeatureCount: dataset.featureCount,
+      },
+    }
+
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, sourceLayer]))
+    setEditableLayerId(layerId)
+    setPendingSourceImport(null)
+  }
+
+  const handleSourceImportCancel = () => {
+    if (pendingSourceImport) {
+      removeSource(pendingSourceImport.sourceId)
+    }
+    setPendingSourceImport(null)
+  }
+
+  // Shared helper: takes a GeoJSON FeatureCollection + a display name and
+  // feeds it into the source pipeline (readGeoJSONMeta → sourceStore → SourceImportDialog).
+  const openSourceImportFromGeojson = (geojson, displayName, sourceType = 'geojson') => {
+    const meta = readGeoJSONMeta(geojson)
+    if (!meta) {
+      window.alert("No s'han trobat geometries vàlides")
+      return
+    }
+    const sourceId = `src-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    storeSourceFeatures(sourceId, meta.rawFeatures)
+    setPendingSourceImport({
+      sourceId,
+      fileName: displayName,
+      sourceType,
+      meta: {
+        featureCount: meta.featureCount,
+        bbox: meta.bbox,
+        fields: meta.fields,
+        geometryType: meta.geometryType,
+      },
+    })
+  }
+
+  const handleImportShapefileClick = () => {
+    importShapefileInputRef.current?.click()
+  }
+
+  const handleImportShapefileFileChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
+
+    try {
+      const result = await readShapefileZip(selectedFile)
+
+      if (result.error) {
+        window.alert(result.error)
+        return
+      }
+
+      const { detectedLayers, warnings, fileName } = result
+
+      if (detectedLayers.length === 1) {
+        // Single layer: proceed directly to SourceImportDialog
+        const layer = detectedLayers[0]
+        openSourceImportFromGeojson(layer.geojson, layer.name, 'shapefile')
+      } else {
+        // Multiple layers: let user choose first
+        setPendingShapefileSelect({ layers: detectedLayers, warnings, zipName: fileName })
+      }
+    } catch {
+      window.alert("No s'ha pogut llegir el shapefile")
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const handleShapefileLayerSelect = (index) => {
+    if (!pendingShapefileSelect) return
+    const layer = pendingShapefileSelect.layers[index]
+    setPendingShapefileSelect(null)
+    openSourceImportFromGeojson(layer.geojson, layer.name, 'shapefile')
+  }
+
+  const handleShapefileLayerSelectCancel = () => {
+    setPendingShapefileSelect(null)
   }
 
   const doImportGeoJSON = (geojsonData, fileName) => {
@@ -1120,6 +1274,13 @@ function App() {
         setEditableLayerId(nextEditableId)
       }
 
+      if (layerToDelete.type === 'source') {
+        if (layerToDelete.datasetId) removeDataset(layerToDelete.datasetId)
+        if (layerToDelete.sourceId) removeSource(layerToDelete.sourceId)
+        setSources((s) => s.filter((src) => src.id !== layerToDelete.sourceId))
+        setDatasets((d) => d.filter((ds) => ds.id !== layerToDelete.datasetId))
+      }
+
       return nextLayers
     })
   }
@@ -1132,6 +1293,23 @@ function App() {
           featureCount={pendingGeoJSONImport.featureCount}
           onConfirm={handleGeoJSONImportConfirm}
           onCancel={handleGeoJSONImportCancel}
+        />
+      ) : null}
+      {pendingSourceImport ? (
+        <SourceImportDialog
+          fileName={pendingSourceImport.fileName}
+          meta={pendingSourceImport.meta}
+          onConfirm={handleSourceImportConfirm}
+          onCancel={handleSourceImportCancel}
+        />
+      ) : null}
+      {pendingShapefileSelect ? (
+        <ShapefileLayerSelectDialog
+          layers={pendingShapefileSelect.layers}
+          warnings={pendingShapefileSelect.warnings}
+          zipName={pendingShapefileSelect.zipName}
+          onConfirm={handleShapefileLayerSelect}
+          onCancel={handleShapefileLayerSelectCancel}
         />
       ) : null}
       <input
@@ -1148,6 +1326,13 @@ function App() {
         style={{ display: 'none' }}
         onChange={handleImportGeoJSONFileChange}
       />
+      <input
+        ref={importShapefileInputRef}
+        type="file"
+        accept=".zip"
+        style={{ display: 'none' }}
+        onChange={handleImportShapefileFileChange}
+      />
       <TopBar
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
@@ -1156,6 +1341,7 @@ function App() {
         onAddMunicipalityLayer={handleAddMunicipalityLayer}
         onOpenProject={handleOpenProjectClick}
         onImportGeoJSON={handleImportGeoJSONClick}
+        onImportShapefile={handleImportShapefileClick}
         onExportVisibleGeoJSON={handleExportVisibleGeoJSON}
         onExportPNG={handleExportPNG}
         onExportProject={handleExportProject}
@@ -1231,6 +1417,7 @@ function App() {
             pointFeatures={visiblePointFeatures}
             lineFeatures={visibleLineFeatures}
             polygonFeatures={visiblePolygonFeatures}
+            sourceLayers={visibleSourceLayers}
             visibleLayerOrder={visibleLayerOrder}
             selectedMunicipalityGeometry={selectedMunicipalityGeometry}
             draftLinePoints={draftLinePoints}

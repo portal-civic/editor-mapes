@@ -23,6 +23,7 @@ function TopBar({
   onAddMunicipalityLayer,
   onOpenProject,
   onImportGeoJSON,
+  onImportShapefile,
   onExportVisibleGeoJSON,
   onExportPNG,
   onExportProject,
@@ -298,6 +299,9 @@ function TopBar({
         </button>
         <button type="button" onClick={onImportGeoJSON}>
           Importar GeoJSON
+        </button>
+        <button type="button" onClick={onImportShapefile}>
+          Importar SHP
         </button>
 
         <div className="export-dropdown-wrapper" ref={exportMenuRef}>
