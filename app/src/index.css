@@ -1772,6 +1772,156 @@ button.primary {
   margin-right: auto;
 }
 
+/* ─── GVA preset suggestions (CategoricalStyleEditor) ───────────── */
+
+.gva-presets-block {
+  border: 1px solid #c7d8f5;
+  border-radius: 8px;
+  background: #f0f7ff;
+  overflow: hidden;
+}
+
+.gva-presets-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f4c81;
+  text-align: left;
+}
+
+.gva-presets-toggle:hover {
+  background: #dbeafe;
+}
+
+.gva-presets-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0f4c81;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.gva-presets-chevron {
+  margin-left: auto;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.gva-presets-list {
+  border-top: 1px solid #c7d8f5;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.gva-preset-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid #dbeafe;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gva-preset-item:last-child {
+  border-bottom: none;
+}
+
+.gva-preset-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gva-preset-group-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #0f4c81;
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.gva-preset-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+.gva-preset-recfield {
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: #0f4c81;
+  background: #dbeafe;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.gva-preset-desc {
+  font-size: 0.775rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.gva-preset-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.gva-preset-reasons {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gva-preset-apply-btn {
+  padding: 3px 10px;
+  border: 1px solid #0f4c81;
+  border-radius: 5px;
+  background: #0f4c81;
+  color: #fff;
+  font-size: 0.775rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.gva-preset-apply-btn:hover:not(:disabled) {
+  background: #023e8a;
+  border-color: #023e8a;
+}
+
+.gva-preset-apply-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ─── Map legend overlay ────────────────────────────────────────── */
 
 .map-legend-overlay {

@@ -1104,6 +1104,45 @@ function App() {
     setLayers((prev) =>
       prev.map((l) => {
         if (l.id !== layerId) return l
+        if (partial._applyPreset) {
+          const { preset, recommendedField } = partial
+          const targetField = recommendedField || l.categorical?.field
+          if (!targetField) return l
+
+          // Generate categories from dataset using the preset's palette
+          let cats = generateCategoriesFromDataset(
+            l.datasetId,
+            targetField,
+            preset.defaultPalette ?? 'default',
+            allPalettes,
+          )
+
+          // Apply mappings: override label and color for known values
+          if (preset.mappings) {
+            cats = cats.map((cat) => {
+              const key = cat.value == null ? '__null__' : String(cat.value)
+              const mapping = preset.mappings[key] ?? preset.mappings[String(cat.value)]
+              if (!mapping) return cat
+              return {
+                ...cat,
+                label: mapping.label ?? cat.label,
+                ...(mapping.color != null
+                  ? { color: mapping.color, fillColor: null, strokeColor: null }
+                  : {}),
+              }
+            })
+          }
+
+          return {
+            ...l,
+            categorical: { field: targetField, categories: cats },
+            legend: {
+              ...(l.legend ?? {}),
+              title: preset.legendTitle || l.legend?.title || l.name,
+            },
+          }
+        }
+
         if (partial._generate) {
           const generated = generateCategoriesFromDataset(
             l.datasetId,

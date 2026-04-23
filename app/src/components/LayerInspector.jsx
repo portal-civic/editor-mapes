@@ -3,6 +3,7 @@ import IconPicker from './IconPicker'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { normalizeCategory } from '../modules/sources/categoricalStyle'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
+import { suggestGvaPresets, GVA_GROUPS } from '../modules/presets/gva'
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
 
@@ -19,6 +20,28 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
   )
 
   const [selectedPaletteId, setSelectedPaletteId] = useState('default')
+  const [showGvaPresets, setShowGvaPresets] = useState(false)
+
+  // Sample values per field (up to 30 unique values each, from first 300 features)
+  const sampleValues = useMemo(() => {
+    if (!layer.datasetId) return {}
+    const features = getDatasetFeatures(layer.datasetId)
+    const result = {}
+    for (const f of fields) {
+      const vals = new Set()
+      for (const feat of features.slice(0, 300)) {
+        const v = feat.properties?.[f]
+        if (v != null) { vals.add(String(v)); if (vals.size >= 30) break }
+      }
+      result[f] = Array.from(vals)
+    }
+    return result
+  }, [layer.datasetId, fields])
+
+  const gvaSuggestions = useMemo(
+    () => suggestGvaPresets({ layerName: layer.name || '', fields, sampleValues }).slice(0, 3),
+    [layer.name, fields, sampleValues],
+  )
 
   // Map: raw key → category (for value distribution display)
   const categoryKeyMap = useMemo(() => {
@@ -138,6 +161,64 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
       ) : field && distInfo && distInfo.values.length === 0 ? (
         <p className="catdiag-warn">⚠ Cap valor trobat per "{field}"</p>
       ) : null}
+
+      {/* GVA preset suggestions */}
+      {gvaSuggestions.length > 0 && (
+        <div className="gva-presets-block">
+          <button
+            type="button"
+            className="gva-presets-toggle"
+            onClick={() => setShowGvaPresets((v) => !v)}
+          >
+            <span>Presets GVA suggerits</span>
+            <span className="gva-presets-badge">{gvaSuggestions.length}</span>
+            <span className="gva-presets-chevron">{showGvaPresets ? '▲' : '▼'}</span>
+          </button>
+          {showGvaPresets && (
+            <div className="gva-presets-list">
+              {gvaSuggestions.map(({ preset, score, reasons, recommendedField: recField }) => {
+                const canApply = !!(recField || field)
+                return (
+                  <div key={preset.id} className="gva-preset-item">
+                    <div className="gva-preset-top">
+                      <span className="gva-preset-group-badge">
+                        {GVA_GROUPS[preset.group] ?? preset.group}
+                      </span>
+                      <span className="gva-preset-name">{preset.name}</span>
+                      {recField && (
+                        <span className="gva-preset-recfield" title="Camp recomanat">
+                          {recField}
+                        </span>
+                      )}
+                    </div>
+                    <p className="gva-preset-desc">{preset.description}</p>
+                    <div className="gva-preset-footer">
+                      <span className="gva-preset-reasons">
+                        {reasons.slice(0, 2).join(' · ')}
+                      </span>
+                      <button
+                        type="button"
+                        className="gva-preset-apply-btn"
+                        disabled={!canApply}
+                        title={canApply ? `Aplicar "${preset.name}"` : 'Cal seleccionar un camp'}
+                        onClick={() =>
+                          onLayerCategoricalChange?.(layer.id, {
+                            _applyPreset: true,
+                            preset,
+                            recommendedField: recField || field || null,
+                          })
+                        }
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Palette selector + generate / apply */}
       {field ? (
