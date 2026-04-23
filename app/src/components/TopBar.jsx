@@ -24,6 +24,7 @@ function TopBar({
   onOpenProject,
   onImportGeoJSON,
   onImportShapefile,
+  onImportGpkg,
   onExportVisibleGeoJSON,
   onExportPNG,
   onExportProject,
@@ -302,6 +303,9 @@ function TopBar({
         </button>
         <button type="button" onClick={onImportShapefile}>
           Importar SHP
+        </button>
+        <button type="button" onClick={onImportGpkg}>
+          Importar GPKG
         </button>
 
         <div className="export-dropdown-wrapper" ref={exportMenuRef}>

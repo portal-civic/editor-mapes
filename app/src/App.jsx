@@ -8,6 +8,7 @@ import LayerInspector from './components/LayerInspector'
 import GeoJsonImportDialog from './components/GeoJsonImportDialog'
 import SourceImportDialog from './components/SourceImportDialog'
 import ShapefileLayerSelectDialog from './components/ShapefileLayerSelectDialog'
+import GpkgLayerSelectDialog from './components/GpkgLayerSelectDialog'
 import BearingControls from './components/BearingControls'
 import useMapExport from './hooks/useMapExport'
 import {
@@ -50,6 +51,7 @@ import { readGeoJSONMeta } from './modules/sources/readGeoJSONMeta'
 import { createDatasetFromSource } from './modules/sources/createDataset'
 import { storeSourceFeatures, removeSource, removeDataset } from './modules/sources/sourceStore'
 import { readShapefileZip } from './modules/sources/readShapefileZip'
+import { openGpkgFile } from './modules/sources/readGpkg'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -59,6 +61,8 @@ function App() {
   const importInputRef = useRef(null)
   const importGeoJSONInputRef = useRef(null)
   const importShapefileInputRef = useRef(null)
+  const importGpkgInputRef = useRef(null)
+  const gpkgHandleRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const { exportMapAsPNG } = useMapExport()
   const [layers, setLayers] = useState(() => {
@@ -98,6 +102,8 @@ function App() {
   const [pendingSourceImport, setPendingSourceImport] = useState(null)
   // pendingShapefileSelect = { layers, warnings, zipName } | null  (multi-layer SHP)
   const [pendingShapefileSelect, setPendingShapefileSelect] = useState(null)
+  // pendingGpkgLayers = { layers, warnings, fileName } | null  (multi-layer GPKG)
+  const [pendingGpkgLayers, setPendingGpkgLayers] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -835,6 +841,68 @@ function App() {
     setPendingShapefileSelect(null)
   }
 
+  const handleImportGpkgClick = () => {
+    importGpkgInputRef.current?.click()
+  }
+
+  const handleImportGpkgFileChange = async (event) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
+
+    try {
+      const result = await openGpkgFile(selectedFile)
+
+      if (result.error) {
+        window.alert(result.error)
+        return
+      }
+
+      // result is a GpkgHandle — store outside React state
+      gpkgHandleRef.current = result
+
+      if (result.layers.length === 1) {
+        await _convertAndOpenGpkgLayer(result, 0)
+      } else {
+        setPendingGpkgLayers({
+          layers: result.layers.map((l) => ({ name: l.name, featureCount: l.featureCount })),
+          warnings: result.warnings,
+          fileName: result.fileName,
+        })
+      }
+    } catch {
+      window.alert("No s'ha pogut obrir el GeoPackage")
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const _convertAndOpenGpkgLayer = async (handle, index) => {
+    try {
+      const layerName = handle.layers[index].name
+      const geojson = await handle.convertLayer(index)
+      handle.close()
+      gpkgHandleRef.current = null
+      openSourceImportFromGeojson(geojson, layerName, 'gpkg')
+    } catch (err) {
+      handle.close()
+      gpkgHandleRef.current = null
+      window.alert(`Error convertint la capa: ${err?.message || 'error desconegut'}`)
+    }
+  }
+
+  const handleGpkgLayerSelect = async (index) => {
+    const handle = gpkgHandleRef.current
+    if (!handle) return
+    setPendingGpkgLayers(null)
+    await _convertAndOpenGpkgLayer(handle, index)
+  }
+
+  const handleGpkgLayerSelectCancel = () => {
+    const handle = gpkgHandleRef.current
+    if (handle) { handle.close(); gpkgHandleRef.current = null }
+    setPendingGpkgLayers(null)
+  }
+
   const doImportGeoJSON = (geojsonData, fileName) => {
     const importedLayers = buildImportedLayersFromGeoJSON(geojsonData, fileName)
 
@@ -1333,6 +1401,22 @@ function App() {
         style={{ display: 'none' }}
         onChange={handleImportShapefileFileChange}
       />
+      <input
+        ref={importGpkgInputRef}
+        type="file"
+        accept=".gpkg"
+        style={{ display: 'none' }}
+        onChange={handleImportGpkgFileChange}
+      />
+      {pendingGpkgLayers ? (
+        <GpkgLayerSelectDialog
+          layers={pendingGpkgLayers.layers}
+          warnings={pendingGpkgLayers.warnings}
+          fileName={pendingGpkgLayers.fileName}
+          onConfirm={handleGpkgLayerSelect}
+          onCancel={handleGpkgLayerSelectCancel}
+        />
+      ) : null}
       <TopBar
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
@@ -1342,6 +1426,7 @@ function App() {
         onOpenProject={handleOpenProjectClick}
         onImportGeoJSON={handleImportGeoJSONClick}
         onImportShapefile={handleImportShapefileClick}
+        onImportGpkg={handleImportGpkgClick}
         onExportVisibleGeoJSON={handleExportVisibleGeoJSON}
         onExportPNG={handleExportPNG}
         onExportProject={handleExportProject}

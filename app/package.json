@@ -21,6 +21,7 @@
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
     "shpjs": "^6.2.0",
+    "sql.js": "^1.14.1",
     "svg2pdf.js": "^2.7.0"
   },
   "devDependencies": {
