@@ -21,6 +21,7 @@ import { resolveFaIcon } from '../icons/faIconResolver'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { filterByViewportBbox } from '../modules/sources/bboxFilter'
 import { leafletStyleForCategory } from '../modules/sources/categoricalStyle'
+import MapLegendOverlay from './MapLegendOverlay'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
 const DEFAULT_ZOOM = 6
@@ -406,6 +407,7 @@ function MapCanvas({
   onDraftPolygonPointAdd,
   onViewChange,
   onMapReady,
+  legendEntries = [],
 }) {
   const tileLayerProps = getTileLayerProps(selectedBasemap)
   const isPointMode = activeWorkModeId === 'point'
@@ -892,6 +894,7 @@ function MapCanvas({
           )
         })}
       </MapContainer>
+      <MapLegendOverlay entries={legendEntries} />
     </section>
   )
 }

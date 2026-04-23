@@ -57,6 +57,7 @@ import {
   applyPaletteToCategories,
   normalizeCategory,
 } from './modules/sources/categoricalStyle'
+import { buildLegendEntries } from './modules/legend/buildLegendEntries'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -206,6 +207,8 @@ function App() {
     () => layers.filter((l) => l.type === 'source' && l.visible),
     [layers],
   )
+
+  const legendEntries = useMemo(() => buildLegendEntries(layers), [layers])
 
   const editableLayer = useMemo(
     () => vectorLayers.find((l) => l.id === editableLayerId) ?? null,
@@ -902,11 +905,92 @@ function App() {
     }
   }
 
-  const handleGpkgLayerSelect = async (index) => {
+  const handleGpkgLayerSelect = async (indices) => {
     const handle = gpkgHandleRef.current
     if (!handle) return
     setPendingGpkgLayers(null)
-    await _convertAndOpenGpkgLayer(handle, index)
+
+    if (indices.length === 1) {
+      await _convertAndOpenGpkgLayer(handle, indices[0])
+      return
+    }
+
+    // Multi-layer: convert sequentially, batch-add without SourceImportDialog
+    const newSources = []
+    const newDatasets = []
+    const newLayers = []
+    const errors = []
+
+    for (const index of indices) {
+      const layerName = handle.layers[index].name
+      try {
+        const geojson = await handle.convertLayer(index)
+        const meta = readGeoJSONMeta(geojson)
+        if (!meta) {
+          errors.push(`${layerName}: sense geometries vàlides`)
+          continue
+        }
+
+        const sourceId = `src-${Date.now()}-${Math.round(Math.random() * 1e8)}`
+        storeSourceFeatures(sourceId, meta.rawFeatures)
+
+        const dataset = createDatasetFromSource(sourceId, {})
+        const sourceRecord = { id: sourceId, type: 'gpkg', fileName: layerName, meta }
+
+        const effectiveGeomType = meta.geometryType === 'mixed' ? 'polygon' : meta.geometryType
+        const layerColor =
+          effectiveGeomType === 'polygon' ? '#2f7de1'
+          : effectiveGeomType === 'line' ? '#ea8b1f'
+          : '#d4335b'
+        const layerId = `src-layer-${Date.now()}-${Math.round(Math.random() * 1e8)}`
+
+        newSources.push(sourceRecord)
+        newDatasets.push(dataset)
+        newLayers.push({
+          id: layerId,
+          name: layerName,
+          color: layerColor,
+          geometryType: effectiveGeomType,
+          visible: true,
+          legendLabel: layerName,
+          style: getDefaultLayerStyle(effectiveGeomType, layerColor),
+          features: [],
+          type: 'source',
+          datasetId: dataset.id,
+          sourceId,
+          meta: {
+            totalFeatureCount: meta.featureCount,
+            loadedFeatureCount: dataset.featureCount,
+            fields: meta.fields ?? [],
+          },
+          legend: {
+            title: layerName,
+            showCounts: false,
+            orderMode: 'manual',
+            visible: true,
+          },
+        })
+      } catch (err) {
+        errors.push(`${layerName}: ${err?.message || 'error desconegut'}`)
+      }
+    }
+
+    handle.close()
+    gpkgHandleRef.current = null
+
+    if (newLayers.length > 0) {
+      setSources((s) => [...s, ...newSources])
+      setDatasets((d) => [...d, ...newDatasets])
+      setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, ...newLayers]))
+      setEditableLayerId(newLayers[newLayers.length - 1].id)
+    }
+
+    if (errors.length > 0) {
+      const okMsg = newLayers.length > 0
+        ? `${newLayers.length} capa(es) importada(es) correctament.`
+        : 'Cap capa importada.'
+      window.alert(`${okMsg}\n\nErrors:\n${errors.join('\n')}`)
+    }
   }
 
   const handleGpkgLayerSelectCancel = () => {
@@ -1567,6 +1651,7 @@ function App() {
             onViewChange={handleMapViewChange}
             onMapReady={handleMapReady}
             focusMask={focusMask}
+            legendEntries={legendEntries}
           />
         </section>
         {selectedFeatureData ? (

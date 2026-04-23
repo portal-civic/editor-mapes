@@ -1,6 +1,7 @@
 import { waitNextFrame, downloadBlob } from './utils'
 import { waitForTiles, drawTiles, drawCanvasLayers, drawMarkerLayers } from './drawLayers'
 import { drawLegend } from './drawLegend'
+import { buildLegendEntries } from '../legend/buildLegendEntries'
 import { drawTitle } from './drawTitle'
 import { drawNorthArrow } from './drawNorth'
 import { drawScaleBar } from './drawScale'
@@ -54,7 +55,7 @@ export async function exportMapAsPNG({
   drawTiles(ctx, mapContainer, containerRect)
   drawCanvasLayers(ctx, mapContainer, containerRect)
   await drawMarkerLayers(ctx, mapContainer)
-  if (showLegend) drawLegend(ctx, width, height, legendLayers)
+  if (showLegend) drawLegend(ctx, width, height, buildLegendEntries(legendLayers))
   drawTitle(ctx, width, title)
   drawNorthArrow(ctx, width)
   drawScaleBar(ctx, map, height)
