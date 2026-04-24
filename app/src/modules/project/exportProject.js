@@ -6,6 +6,7 @@ export function buildProjectData({
   layers,
   groups,
   projectPalettes = [],
+  legendLayout = null,
 }) {
   return {
     version: 1,
@@ -18,6 +19,7 @@ export function buildProjectData({
       layers,
       groups: Array.isArray(groups) ? groups : [],
       palettes: projectPalettes,
+      legendLayout,
     },
   }
 }

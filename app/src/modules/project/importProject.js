@@ -1,4 +1,5 @@
 import { normalizeLayerStyle, ensureInitialPointLayer, normalizeFeature } from '../layers'
+import { normalizeLegendLayout } from '../legend/legendLayout'
 
 export function isValidProjectData(parsedData) {
   return (
@@ -25,6 +26,10 @@ export function normalizeImportedGroups(groups) {
   return groups
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')
     .map((g) => ({ id: g.id, name: g.name }))
+}
+
+export function normalizeImportedLegendLayout(raw) {
+  return normalizeLegendLayout(raw)
 }
 
 export function normalizeImportedPalettes(palettes) {

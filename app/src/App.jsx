@@ -31,6 +31,7 @@ import {
   normalizeImportedLayers,
   normalizeImportedGroups,
   normalizeImportedPalettes,
+  normalizeImportedLegendLayout,
   downloadWebProject,
 } from './modules/project'
 import { buildLayerSVG } from './modules/export/exportSVG'
@@ -61,10 +62,15 @@ import {
 } from './modules/sources/categoricalStyle'
 import { PALETTES } from './modules/styles/palettes'
 import { buildLegendEntries } from './modules/legend/buildLegendEntries'
+import { DEFAULT_LEGEND_LAYOUT, normalizeLegendLayout } from './modules/legend/legendLayout'
 import {
   applyDictionaryToCategories,
   ALL_DICTIONARIES,
 } from './modules/dictionaries'
+import { getDatasetFeatures } from './modules/sources/sourceStore'
+import { filterByViewportBbox } from './modules/sources/bboxFilter'
+import LegendPanel from './components/LegendPanel'
+import LegendConfigPanel from './components/LegendConfigPanel'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -120,6 +126,11 @@ function App() {
   // projectPalettes: user-defined palettes, exported with the project
   const [projectPalettes, setProjectPalettes] = useState([])
   const [showPaletteManager, setShowPaletteManager] = useState(false)
+  const [rightPanelTab, setRightPanelTab] = useState('layer')
+  // legendLayout: global legend configuration (position, fonts, language, etc.)
+  const [legendLayout, setLegendLayout] = useState(DEFAULT_LEGEND_LAYOUT)
+  // mapViewport: [west, south, east, north] updated on map moveend — used for viewport filtering
+  const [mapViewport, setMapViewport] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -218,7 +229,36 @@ function App() {
     [layers],
   )
 
-  const legendEntries = useMemo(() => buildLegendEntries(layers), [layers])
+  // Viewport-visible category values for categorical source layers.
+  // Only populated when showOnlyVisibleInViewport is active.
+  const visibleValuesByLayerId = useMemo(() => {
+    if (!legendLayout.showOnlyVisibleInViewport || !mapViewport) return null
+    const result = {}
+    for (const layer of layers) {
+      if (!layer.visible || layer.styleMode !== 'categorical') continue
+      const field = layer.categorical?.field
+      if (!field) continue
+      const values = new Set()
+      if (layer.datasetId) {
+        const features = getDatasetFeatures(layer.datasetId)
+        const visible = filterByViewportBbox(features, mapViewport)
+        for (const feat of visible) {
+          const val = feat.properties?.[field]
+          if (val != null) values.add(String(val))
+        }
+      }
+      result[layer.id] = values
+    }
+    return result
+  }, [legendLayout.showOnlyVisibleInViewport, layers, mapViewport])
+
+  const legendEntries = useMemo(
+    () => buildLegendEntries(layers, {
+      language: legendLayout.language,
+      visibleValuesByLayerId,
+    }),
+    [layers, legendLayout.language, visibleValuesByLayerId],
+  )
 
   const allPalettes = useMemo(() => {
     const map = { ...PALETTES }
@@ -344,7 +384,7 @@ function App() {
     }
   }
 
-  const handleMapViewChange = ({ center, zoom }) => {
+  const handleMapViewChange = ({ center, zoom, bounds }) => {
     setMapView((currentView) => {
       if (
         currentView.zoom === zoom &&
@@ -356,6 +396,7 @@ function App() {
 
       return { center, zoom }
     })
+    if (bounds) setMapViewport(bounds)
   }
 
   // Converts a GeoJSON Polygon/MultiPolygon geometry to the Leaflet latlngs format
@@ -447,6 +488,7 @@ function App() {
       layers,
       groups,
       projectPalettes,
+      legendLayout,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
     const blob = new Blob([jsonContent], { type: 'application/json' })
@@ -599,19 +641,17 @@ function App() {
     }
 
     try {
-      const visibleLayers = layers.filter(
-        (layer) =>
-          layer.visible &&
-          (layer.geometryType === 'point' ||
-            layer.geometryType === 'line' ||
-            layer.geometryType === 'polygon'),
-      )
+      // When the TopBar "Llegenda" toggle is off, force position=none for this export.
+      const exportLayout = showLegend
+        ? legendLayout
+        : { ...legendLayout, position: 'none' }
+
       await exportMapAsPNG({
         map: mapInstanceRef.current,
         fileName: 'editor-mapes.png',
-        legendLayers: visibleLayers,
+        legendEntries,
+        legendLayout: exportLayout,
         title,
-        showLegend,
       })
     } catch {
       window.alert("No s'ha pogut exportar la imatge PNG")
@@ -655,6 +695,7 @@ function App() {
       setLayers(normalizeImportedLayers(importedProject.layers))
       setGroups(normalizeImportedGroups(importedProject.groups))
       setProjectPalettes(normalizeImportedPalettes(importedProject.palettes))
+      setLegendLayout(normalizeImportedLegendLayout(importedProject.legendLayout))
       setBearing(typeof importedProject.mapView?.bearing === 'number' ? importedProject.mapView.bearing : 0)
       // Support new format (editableLayerId) and old format (activePointLayerId etc.)
       setEditableLayerId(
@@ -1704,76 +1745,138 @@ function App() {
               </button>
             </div>
           ) : null}
-          <MapCanvas
-            selectedBasemap={selectedBasemap}
-            activeWorkModeId={activeWorkModeId}
-            bearing={effectiveBearing}
-            mapCenter={mapView.center}
-            mapZoom={mapView.zoom}
-            mapNavigationRequest={mapNavigationRequest}
-            pointFeatures={visiblePointFeatures}
-            lineFeatures={visibleLineFeatures}
-            polygonFeatures={visiblePolygonFeatures}
-            sourceLayers={visibleSourceLayers}
-            visibleLayerOrder={visibleLayerOrder}
-            selectedMunicipalityGeometry={selectedMunicipalityGeometry}
-            draftLinePoints={draftLinePoints}
-            draftPolygonPoints={draftPolygonPoints}
-            editableLayerId={editableLayerId}
-            selectedFeature={selectedFeature}
-            onPointAdd={handleMapPointAdd}
-            onPointDelete={handleMapPointDelete}
-            onPointMove={handleMapPointMove}
-            onFeatureSelect={handleFeatureSelect}
-            onLineDelete={handleMapLineDelete}
-            onPolygonDelete={handleMapPolygonDelete}
-            onDraftLinePointAdd={handleDraftLinePointAdd}
-            onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
-            onViewChange={handleMapViewChange}
-            onMapReady={handleMapReady}
-            focusMask={focusMask}
-            legendEntries={legendEntries}
-          />
+          {(() => {
+            const lpos = legendLayout.position ?? 'inside'
+            const isColumn = lpos === 'right' || lpos === 'left'
+            const isBottom = lpos === 'bottom'
+            const showExternalLegend = isColumn || isBottom
+            const wrapClass = isColumn
+              ? `map-area-wrap map-area-wrap--${lpos}`
+              : isBottom
+                ? 'map-area-wrap map-area-wrap--bottom'
+                : 'map-area-wrap'
+
+            const mapCanvasEl = (
+              <MapCanvas
+                selectedBasemap={selectedBasemap}
+                activeWorkModeId={activeWorkModeId}
+                bearing={effectiveBearing}
+                mapCenter={mapView.center}
+                mapZoom={mapView.zoom}
+                mapNavigationRequest={mapNavigationRequest}
+                pointFeatures={visiblePointFeatures}
+                lineFeatures={visibleLineFeatures}
+                polygonFeatures={visiblePolygonFeatures}
+                sourceLayers={visibleSourceLayers}
+                visibleLayerOrder={visibleLayerOrder}
+                selectedMunicipalityGeometry={selectedMunicipalityGeometry}
+                draftLinePoints={draftLinePoints}
+                draftPolygonPoints={draftPolygonPoints}
+                editableLayerId={editableLayerId}
+                selectedFeature={selectedFeature}
+                onPointAdd={handleMapPointAdd}
+                onPointDelete={handleMapPointDelete}
+                onPointMove={handleMapPointMove}
+                onFeatureSelect={handleFeatureSelect}
+                onLineDelete={handleMapLineDelete}
+                onPolygonDelete={handleMapPolygonDelete}
+                onDraftLinePointAdd={handleDraftLinePointAdd}
+                onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
+                onViewChange={handleMapViewChange}
+                onMapReady={handleMapReady}
+                focusMask={focusMask}
+                legendEntries={showExternalLegend ? [] : legendEntries}
+                legendLayout={legendLayout}
+              />
+            )
+
+            const legendColumnEl = showExternalLegend ? (
+              <div
+                className={`legend-column legend-column--${lpos}`}
+                style={isColumn ? { width: legendLayout.width } : undefined}
+              >
+                <LegendPanel
+                  entries={legendEntries}
+                  layout={legendLayout}
+                  isHorizontal={isBottom}
+                />
+              </div>
+            ) : null
+
+            return (
+              <div className={wrapClass}>
+                {lpos === 'left' && legendColumnEl}
+                {mapCanvasEl}
+                {lpos !== 'left' && legendColumnEl}
+              </div>
+            )
+          })()}
         </section>
-        {selectedFeatureData ? (
-          <FeatureInspector
-            key={`${selectedFeatureData.layer.id}-${selectedFeatureData.feature.id}`}
-            feature={selectedFeatureData.feature}
-            layer={selectedFeatureData.layer}
-            onUpdate={handleFeatureUpdate}
-            onClose={handleFeatureDeselect}
-          />
-        ) : editableLayer ? (
-          <LayerInspector
-            key={editableLayer.id}
-            layer={editableLayer}
-            layerIndex={editableLayerIndex}
-            totalLayers={vectorLayers.length}
-            groups={groups}
-            focusMask={focusMask}
-            onRenameLayer={handleRenameLayer}
-            onLayerStyleChange={handleLayerStyleChange}
-            onLayerStyleModeChange={handleLayerStyleModeChange}
-            onLayerCategoricalChange={handleLayerCategoricalChange}
-            onLayerLegendChange={handleLayerLegendChange}
-            projectPalettes={projectPalettes}
-            onManagePalettes={() => setShowPaletteManager(true)}
-            onMoveLayerUp={handleMoveLayerUp}
-            onMoveLayerDown={handleMoveLayerDown}
-            onExportLayerGeoJSON={handleExportLayerGeoJSON}
-            onExportLayerSVG={handleExportLayerSVG}
-            onExportLayerHybrid={handleExportHybrid}
-            onDeleteLayer={handleDeleteLayer}
-            onSetLayerGroup={handleSetLayerGroup}
-            onToggleLayerInMask={handleToggleLayerInMask}
-            onMaskOpacityChange={handleMaskOpacityChange}
-            onMaskColorChange={handleMaskColorChange}
-          />
-        ) : (
-          <aside className="panel panel-right inspector-empty">
-            <p className="inspector-empty-state">Selecciona una capa per editar les propietats</p>
-          </aside>
-        )}
+        <div className="right-panel-slot">
+          <div className="rp-tab-bar">
+            <button
+              type="button"
+              className={`rp-tab${rightPanelTab === 'layer' ? ' rp-tab--active' : ''}`}
+              onClick={() => setRightPanelTab('layer')}
+            >
+              Capa
+            </button>
+            <button
+              type="button"
+              className={`rp-tab${rightPanelTab === 'map' ? ' rp-tab--active' : ''}`}
+              onClick={() => setRightPanelTab('map')}
+            >
+              Mapa
+            </button>
+          </div>
+
+          {rightPanelTab === 'layer' ? (
+            selectedFeatureData ? (
+              <FeatureInspector
+                key={`${selectedFeatureData.layer.id}-${selectedFeatureData.feature.id}`}
+                feature={selectedFeatureData.feature}
+                layer={selectedFeatureData.layer}
+                onUpdate={handleFeatureUpdate}
+                onClose={handleFeatureDeselect}
+              />
+            ) : editableLayer ? (
+              <LayerInspector
+                key={editableLayer.id}
+                layer={editableLayer}
+                layerIndex={editableLayerIndex}
+                totalLayers={vectorLayers.length}
+                groups={groups}
+                focusMask={focusMask}
+                onRenameLayer={handleRenameLayer}
+                onLayerStyleChange={handleLayerStyleChange}
+                onLayerStyleModeChange={handleLayerStyleModeChange}
+                onLayerCategoricalChange={handleLayerCategoricalChange}
+                onLayerLegendChange={handleLayerLegendChange}
+                projectPalettes={projectPalettes}
+                onManagePalettes={() => setShowPaletteManager(true)}
+                onMoveLayerUp={handleMoveLayerUp}
+                onMoveLayerDown={handleMoveLayerDown}
+                onExportLayerGeoJSON={handleExportLayerGeoJSON}
+                onExportLayerSVG={handleExportLayerSVG}
+                onExportLayerHybrid={handleExportHybrid}
+                onDeleteLayer={handleDeleteLayer}
+                onSetLayerGroup={handleSetLayerGroup}
+                onToggleLayerInMask={handleToggleLayerInMask}
+                onMaskOpacityChange={handleMaskOpacityChange}
+                onMaskColorChange={handleMaskColorChange}
+              />
+            ) : (
+              <aside className="panel panel-right inspector-empty">
+                <p className="inspector-empty-state">Selecciona una capa per editar les propietats</p>
+              </aside>
+            )
+          ) : (
+            <LegendConfigPanel
+              layout={normalizeLegendLayout(legendLayout)}
+              onChange={setLegendLayout}
+            />
+          )}
+        </div>
       </main>
     </div>
   )

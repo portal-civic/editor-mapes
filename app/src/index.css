@@ -210,6 +210,63 @@ button.primary {
   padding: 14px;
 }
 
+/* ─── Right panel slot (tab bar + panel content) ────────────────── */
+
+.right-panel-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rp-tab-bar {
+  display: flex;
+  flex-shrink: 0;
+  background: #ffffff;
+  border: 1px solid #d6dde6;
+  border-radius: 10px 10px 0 0;
+  border-bottom: none;
+  overflow: hidden;
+}
+
+.rp-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #5b6777;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.rp-tab:hover:not(.rp-tab--active) {
+  background: #f3f6fa;
+  color: #314055;
+}
+
+.rp-tab--active {
+  color: #1d4ed8;
+  border-bottom-color: #2563eb;
+  background: #eff6ff;
+}
+
+/* Connect tab bar to panel below */
+.right-panel-slot > .panel {
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* inspector-empty and LegendConfigPanel also sit inside the slot */
+.right-panel-slot > aside.inspector-empty {
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  flex: 1;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -1995,6 +2052,151 @@ button.primary {
   color: #00796b;
   margin: 4px 0 0;
   font-style: italic;
+}
+
+/* ─── Map area wrap (holds map + external legend column) ─────────── */
+
+.map-area-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.map-area-wrap--bottom {
+  flex-direction: column;
+}
+
+/* map-stage inside a wrap fills remaining space */
+.map-area-wrap .map-stage {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── External legend column / bar ──────────────────────────────── */
+
+.legend-column {
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.legend-column--right {
+  border-left: 1px solid #d6dde6;
+}
+
+.legend-column--left {
+  border-right: 1px solid #d6dde6;
+}
+
+.legend-column--bottom {
+  border-top: 1px solid #d6dde6;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* height determined by content */
+}
+
+/* LegendPanel inner content */
+
+.legend-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.legend-panel--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.legend-panel-empty {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.legend-col-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.legend-col-group-title {
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+  line-height: 1.3;
+}
+
+.legend-col-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+}
+
+.legend-col-label {
+  color: #1f2937;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+/* ─── Legend config panel ───────────────────────────────────────── */
+
+.legend-config-panel {
+  gap: 8px !important;
+}
+
+.legend-cfg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend-cfg-label {
+  font-size: 12px;
+  color: #5b6777;
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-cfg-select,
+.legend-cfg-input {
+  flex-shrink: 0;
+  width: 148px;
+  padding: 4px 6px;
+  border: 1px solid #c8d0db;
+  border-radius: 5px;
+  font-size: 12px;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.legend-cfg-divider {
+  border: none;
+  border-top: 1px solid #e8ecf1;
+  margin: 4px 0;
+}
+
+.legend-cfg-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #3e4c5f;
+  cursor: pointer;
+}
+
+.legend-cfg-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 /* ─── Map legend overlay ────────────────────────────────────────── */

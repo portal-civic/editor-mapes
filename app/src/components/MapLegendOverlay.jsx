@@ -30,11 +30,23 @@ function Swatch({ geometryType, style = {} }) {
   )
 }
 
-export default function MapLegendOverlay({ entries = [] }) {
+export default function MapLegendOverlay({ entries = [], layout = {} }) {
   if (entries.length === 0) return null
 
+  const { fontFamily, fontSize, background, border } = layout
+
+  const overlayStyle = {
+    fontFamily: fontFamily || undefined,
+    fontSize: fontSize ? `${fontSize}px` : undefined,
+    // Semi-transparent tinted background when custom colour provided
+    background: background && background !== '#ffffff'
+      ? `${background}ee`
+      : undefined,
+    border: border === false ? 'none' : undefined,
+  }
+
   return (
-    <div className="map-legend-overlay" aria-label="Llegenda">
+    <div className="map-legend-overlay" aria-label="Llegenda" style={overlayStyle}>
       {entries.map((entry, ei) => (
         <div key={ei} className="map-legend-group">
           {entry.rows.length > 1 && (

@@ -127,9 +127,12 @@ function MapViewHandler({ onViewChange }) {
   const map = useMapEvents({
     moveend() {
       const center = map.getCenter()
+      const b = map.getBounds()
       onViewChange?.({
         center: [center.lat, center.lng],
         zoom: map.getZoom(),
+        // [west, south, east, north] — compatible with bboxFilter viewport format
+        bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
       })
     },
   })
@@ -408,6 +411,7 @@ function MapCanvas({
   onViewChange,
   onMapReady,
   legendEntries = [],
+  legendLayout = null,
 }) {
   const tileLayerProps = getTileLayerProps(selectedBasemap)
   const isPointMode = activeWorkModeId === 'point'
@@ -894,7 +898,7 @@ function MapCanvas({
           )
         })}
       </MapContainer>
-      <MapLegendOverlay entries={legendEntries} />
+      <MapLegendOverlay entries={legendEntries} layout={legendLayout ?? {}} />
     </section>
   )
 }

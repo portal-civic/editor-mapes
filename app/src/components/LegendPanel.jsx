@@ -1,29 +1,88 @@
-function LegendPanel({ layers = [] }) {
-  const visibleLayers = layers.filter((layer) => layer.visible)
+// External legend panel — rendered outside the map as a column (right/left) or
+// horizontal bar (bottom). Shares swatch logic with MapLegendOverlay.
 
+function Swatch({ geometryType, style = {} }) {
+  if (geometryType === 'line') {
+    return (
+      <span
+        className="map-legend-swatch map-legend-swatch--line"
+        style={{ backgroundColor: style.color || '#888' }}
+      />
+    )
+  }
+  if (geometryType === 'polygon') {
+    return (
+      <span
+        className="map-legend-swatch map-legend-swatch--polygon"
+        style={{
+          backgroundColor: style.fillColor || '#888',
+          borderColor: style.strokeColor || style.fillColor || '#888',
+        }}
+      />
+    )
+  }
   return (
-    <aside className="panel panel-right">
-      <div className="panel-header">
-        <h2>Llegenda</h2>
-        <button type="button">Editar</button>
-      </div>
-      <div className="panel-content">
-        {visibleLayers.map((layer) => (
-          <article key={layer.id} className="layer-item">
-            <div className="layer-item-main">
-              <span
-                className="layer-swatch"
-                style={{ backgroundColor: layer.color }}
-                aria-hidden="true"
-              />
-              <p className="layer-name">{layer.name || layer.legendLabel}</p>
-            </div>
-            <p className="layer-meta">{layer.geometryType}</p>
-          </article>
-        ))}
-      </div>
-    </aside>
+    <span
+      className="map-legend-swatch map-legend-swatch--point"
+      style={{
+        backgroundColor: style.fillColor || '#888',
+        borderColor: style.strokeColor || style.fillColor || '#888',
+      }}
+    />
   )
 }
 
-export default LegendPanel
+export default function LegendPanel({ entries = [], layout = {}, isHorizontal = false }) {
+  const {
+    fontFamily,
+    fontSize,
+    titleFontSize,
+    background = '#ffffff',
+    padding = 12,
+    border = true,
+  } = layout
+
+  const fontStyle = {
+    fontFamily: fontFamily || undefined,
+    fontSize: fontSize ? `${fontSize}px` : undefined,
+  }
+
+  const borderStyle = border
+    ? isHorizontal
+      ? { borderTop: '1px solid #d6dde6' }
+      : {} // border applied via CSS on the .legend-column wrapper
+    : {}
+
+  return (
+    <div
+      className={`legend-panel${isHorizontal ? ' legend-panel--horizontal' : ''}`}
+      style={{ background, padding, ...fontStyle, ...borderStyle }}
+      aria-label="Llegenda"
+    >
+      {entries.length === 0 ? (
+        <span className="legend-panel-empty">Cap llegenda</span>
+      ) : (
+        entries.map((entry, ei) => (
+          <div key={ei} className="legend-col-group">
+            {entry.rows.length > 1 && (
+              <div
+                className="legend-col-group-title"
+                style={titleFontSize ? { fontSize: `${titleFontSize}px` } : undefined}
+              >
+                {entry.title}
+              </div>
+            )}
+            {entry.rows.map((row, ri) => (
+              <div key={ri} className="legend-col-row">
+                <Swatch geometryType={row.geometryType} style={row.style} />
+                <span className="legend-col-label" style={fontStyle}>
+                  {row.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}

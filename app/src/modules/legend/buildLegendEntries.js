@@ -1,12 +1,20 @@
 import { normalizeCategory } from '../sources/categoricalStyle'
+import { resolveLegendLabel } from './legendLayout'
 
 // ─── Per-layer legend entry ───────────────────────────────────────────────────
 // Returns { title, rows } | null
 // rows: [{ label, geometryType, style }]
-// style uses: fillColor, strokeColor, strokeWidth (point/polygon) | color, width (line)
+//
+// options:
+//   language              — 'val' | 'cas' | 'eng' (default 'val')
+//   visibleValuesByLayerId — Map<layerId, Set<string>> | null; when provided,
+//                           categories whose value is not in the set are hidden.
 
-export function buildLegendEntry(layer) {
+export function buildLegendEntry(layer, options = {}) {
   if (layer.legend?.visible === false) return null
+
+  const language = options.language ?? 'val'
+  const visibleValues = options.visibleValuesByLayerId?.[layer.id] // Set | undefined
 
   const title = layer.legend?.title || layer.legendLabel || layer.name || ''
   const showCounts = layer.legend?.showCounts === true
@@ -18,8 +26,17 @@ export function buildLegendEntry(layer) {
       .map((c, i) => normalizeCategory(c, i))
       .filter((c) => c.legendVisible !== false)
 
+    // Viewport filter: only categories with visible features in the current bbox
+    if (visibleValues !== undefined) {
+      cats = cats.filter((c) => visibleValues.has(String(c.value)))
+    }
+
     if (orderMode === 'alpha') {
-      cats = [...cats].sort((a, b) => a.label.localeCompare(b.label))
+      cats = [...cats].sort((a, b) => {
+        const la = resolveLegendLabel(a.label, language)
+        const lb = resolveLegendLabel(b.label, language)
+        return la.localeCompare(lb)
+      })
     } else if (orderMode === 'count') {
       cats = [...cats].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
     } else {
@@ -32,9 +49,10 @@ export function buildLegendEntry(layer) {
       const color = cat.color ?? '#888888'
       const fill = cat.fillColor ?? color
       const stroke = cat.strokeColor ?? color
+      const resolvedLabel = resolveLegendLabel(cat.label, language) || String(cat.value)
       const label = showCounts && cat.count > 0
-        ? `${cat.label} (${cat.count.toLocaleString()})`
-        : cat.label
+        ? `${resolvedLabel} (${cat.count.toLocaleString()})`
+        : resolvedLabel
 
       let style
       if (geom === 'polygon') {
@@ -52,16 +70,16 @@ export function buildLegendEntry(layer) {
   }
 
   // Single-style layer
-  const label = layer.legendLabel || layer.name || ''
+  const label = resolveLegendLabel(layer.legendLabel || layer.name || '', language)
   return { title, rows: [{ label, geometryType: layer.geometryType, style: layer.style ?? {} }] }
 }
 
 // ─── All visible legend entries ───────────────────────────────────────────────
 
-export function buildLegendEntries(layers) {
+export function buildLegendEntries(layers, options = {}) {
   return layers
     .filter((l) => l.visible)
-    .map(buildLegendEntry)
+    .map((l) => buildLegendEntry(l, options))
     .filter(Boolean)
     .filter((e) => e.rows.length > 0)
 }

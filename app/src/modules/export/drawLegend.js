@@ -54,23 +54,47 @@ function drawRowIcon(ctx, row, iconX, iconCenterY, iconW, rowH) {
   ctx.restore()
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// Word-wrap helper for canvas text
+function wrapText(ctx, text, maxWidth) {
+  if (!text) return ['']
+  if (ctx.measureText(text).width <= maxWidth) return [text]
+  const words = String(text).split(' ')
+  const lines = []
+  let current = ''
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current)
+      current = word
+    } else {
+      current = test
+    }
+  }
+  if (current) lines.push(current)
+  return lines.length > 0 ? lines : [text]
+}
+
+// ─── Overlay mode (inside the map, bottom-right corner) ───────────────────────
 // legendEntries: [{ title: string, rows: [{ label, geometryType, style }] }]
 
-export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries) {
+export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout = {}) {
   if (!legendEntries || legendEntries.length === 0) return
 
-  const pad = 12
+  const {
+    fontFamily = 'sans-serif',
+    fontSize = 11,
+    titleFontSize = 10,
+    padding: pad = 12,
+  } = layout
+
   const rowH = 24
   const titleH = 18
   const iconW = 28
   const gap = 8
   const groupGap = 6
-  const fontSize = 11
-  const titleFontSize = 10
 
   ctx.save()
-  ctx.font = `${fontSize}px sans-serif`
+  ctx.font = `${fontSize}px ${fontFamily}`
 
   // Build flat render list + measure max text width
   const items = []
@@ -121,7 +145,7 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries) {
     if (item.type === 'title') {
       ctx.globalAlpha = 1
       ctx.fillStyle = '#94a3b8'
-      ctx.font = `600 ${titleFontSize}px sans-serif`
+      ctx.font = `600 ${titleFontSize}px ${fontFamily}`
       ctx.textBaseline = 'middle'
       ctx.setLineDash([])
       ctx.fillText(item.text.toUpperCase(), bx + pad, curY + titleH / 2)
@@ -133,11 +157,157 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries) {
     drawRowIcon(ctx, item, bx + pad, iconCenterY, iconW, rowH)
     ctx.globalAlpha = 1
     ctx.fillStyle = '#222'
-    ctx.font = `${fontSize}px sans-serif`
+    ctx.font = `${fontSize}px ${fontFamily}`
     ctx.textBaseline = 'middle'
     ctx.setLineDash([])
     ctx.fillText(item.label, bx + pad + iconW + gap, iconCenterY)
     curY += rowH
+  })
+
+  ctx.restore()
+}
+
+// ─── Column mode (side panel in PNG export) ───────────────────────────────────
+// Fills a rectangular column area with white background + legend entries.
+// Text is word-wrapped to fit within the column width.
+
+export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, layout = {}) {
+  if (!legendEntries || legendEntries.length === 0) return
+
+  const {
+    fontFamily = 'sans-serif',
+    fontSize = 11,
+    titleFontSize = 10,
+    background = '#ffffff',
+    border = true,
+    padding: pad = 14,
+  } = layout
+
+  ctx.save()
+
+  // Clip to column bounds to prevent overflow
+  ctx.beginPath()
+  ctx.rect(colX, colY, colW, colH)
+  ctx.clip()
+
+  // Background
+  ctx.fillStyle = background
+  ctx.fillRect(colX, colY, colW, colH)
+
+  // Border on the side that faces the map (left border for right column)
+  if (border) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.14)'
+    ctx.lineWidth = 1
+    ctx.setLineDash([])
+    ctx.beginPath()
+    ctx.moveTo(colX, colY)
+    ctx.lineTo(colX, colY + colH)
+    ctx.stroke()
+  }
+
+  const iconW = Math.max(20, fontSize * 1.8)
+  const gap = 7
+  const textW = colW - pad * 2 - iconW - gap
+  const rowH = Math.max(22, fontSize * 2.1)
+  const titleH = Math.max(16, titleFontSize * 1.9)
+  const lineSpacing = fontSize * 1.4
+
+  let curY = colY + pad
+
+  for (let ei = 0; ei < legendEntries.length; ei++) {
+    const entry = legendEntries[ei]
+    if (ei > 0) curY += 10
+
+    // Group title (only when multiple rows)
+    if (entry.rows.length > 1) {
+      ctx.globalAlpha = 1
+      ctx.fillStyle = '#94a3b8'
+      ctx.font = `600 ${titleFontSize}px ${fontFamily}`
+      ctx.textBaseline = 'middle'
+      ctx.setLineDash([])
+      ctx.fillText((entry.title || '').toUpperCase(), colX + pad, curY + titleH / 2)
+      curY += titleH
+    }
+
+    // Rows
+    for (const row of entry.rows) {
+      if (curY >= colY + colH - 4) break // overflow guard
+
+      ctx.font = `${fontSize}px ${fontFamily}`
+      const lines = wrapText(ctx, row.label || '', Math.max(textW, 20))
+      const rowActualH = lines.length > 1 ? lines.length * lineSpacing + 4 : rowH
+      const iconCenterY = curY + Math.min(rowH, rowActualH) / 2
+
+      drawRowIcon(ctx, row, colX + pad, iconCenterY, iconW, rowH)
+
+      ctx.globalAlpha = 1
+      ctx.fillStyle = '#1f2937'
+      ctx.font = `${fontSize}px ${fontFamily}`
+      ctx.textBaseline = 'top'
+      ctx.setLineDash([])
+
+      const textX = colX + pad + iconW + gap
+      const textStartY = curY + (rowActualH - lines.length * lineSpacing) / 2
+
+      for (let li = 0; li < lines.length; li++) {
+        ctx.fillText(lines[li], textX, textStartY + li * lineSpacing)
+      }
+
+      curY += rowActualH
+    }
+  }
+
+  ctx.restore()
+}
+
+// ─── Horizontal bar mode (bottom strip in PNG export) ────────────────────────
+// Entries are laid out in columns side-by-side within a horizontal strip.
+
+export function drawLegendBar(ctx, barX, barY, barW, barH, legendEntries, layout = {}) {
+  if (!legendEntries || legendEntries.length === 0) return
+
+  const {
+    fontFamily = 'sans-serif',
+    fontSize = 11,
+    background = '#ffffff',
+    border = true,
+    padding: pad = 12,
+  } = layout
+
+  ctx.save()
+
+  ctx.beginPath()
+  ctx.rect(barX, barY, barW, barH)
+  ctx.clip()
+
+  ctx.fillStyle = background
+  ctx.fillRect(barX, barY, barW, barH)
+
+  if (border) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.14)'
+    ctx.lineWidth = 1
+    ctx.setLineDash([])
+    ctx.beginPath()
+    ctx.moveTo(barX, barY)
+    ctx.lineTo(barX + barW, barY)
+    ctx.stroke()
+  }
+
+  // Split entries into columns of equal width
+  const count = legendEntries.length
+  const colW = Math.floor((barW - pad) / Math.max(count, 1))
+
+  legendEntries.forEach((entry, ei) => {
+    // Draw each entry as a mini-column
+    drawLegendColumn(
+      ctx,
+      barX + ei * colW,
+      barY,
+      colW,
+      barH,
+      [entry],
+      { ...layout, border: false },
+    )
   })
 
   ctx.restore()
