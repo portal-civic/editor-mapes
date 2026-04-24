@@ -61,6 +61,10 @@ import {
 } from './modules/sources/categoricalStyle'
 import { PALETTES } from './modules/styles/palettes'
 import { buildLegendEntries } from './modules/legend/buildLegendEntries'
+import {
+  applyDictionaryToCategories,
+  ALL_DICTIONARIES,
+} from './modules/dictionaries'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -1133,6 +1137,15 @@ function App() {
             })
           }
 
+          // Apply dictionary if the preset specifies one (e.g., dictionaryId: 'siose')
+          if (preset.dictionaryId) {
+            const dict = ALL_DICTIONARIES.find((d) => d.id === preset.dictionaryId)
+            if (dict) {
+              const { categories: dictCats } = applyDictionaryToCategories(cats, dict)
+              cats = dictCats
+            }
+          }
+
           return {
             ...l,
             categorical: { field: targetField, categories: cats },
@@ -1141,6 +1154,13 @@ function App() {
               title: preset.legendTitle || l.legend?.title || l.name,
             },
           }
+        }
+
+        if (partial._applyDictionary) {
+          const { dictionary } = partial
+          const current = (l.categorical?.categories ?? []).map(normalizeCategory)
+          const { categories: next } = applyDictionaryToCategories(current, dictionary)
+          return { ...l, categorical: { ...(l.categorical ?? {}), categories: next } }
         }
 
         if (partial._generate) {

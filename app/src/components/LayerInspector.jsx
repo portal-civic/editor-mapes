@@ -4,6 +4,10 @@ import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { normalizeCategory } from '../modules/sources/categoricalStyle'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
 import { suggestGvaPresets, GVA_GROUPS } from '../modules/presets/gva'
+import {
+  findCompatibleDictionaries,
+  applyDictionaryToCategories,
+} from '../modules/dictionaries'
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
 
@@ -42,6 +46,12 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
     () => suggestGvaPresets({ layerName: layer.name || '', fields, sampleValues }).slice(0, 3),
     [layer.name, fields, sampleValues],
   )
+
+  const compatibleDicts = useMemo(() => findCompatibleDictionaries(field), [field])
+  const [dictApplyResult, setDictApplyResult] = useState(null) // { dictId, translated, untranslated }
+
+  // Reset dictionary result when field changes
+  useEffect(() => { setDictApplyResult(null) }, [field])
 
   // Map: raw key → category (for value distribution display)
   const categoryKeyMap = useMemo(() => {
@@ -161,6 +171,43 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
       ) : field && distInfo && distInfo.values.length === 0 ? (
         <p className="catdiag-warn">⚠ Cap valor trobat per "{field}"</p>
       ) : null}
+
+      {/* Dictionary suggestions */}
+      {field && categories.length > 0 && compatibleDicts.length > 0 && (
+        <div className="dict-block">
+          <div className="dict-block-header">Diccionaris de codis</div>
+          {compatibleDicts.map((dict) => {
+            const isApplied = dictApplyResult?.dictId === dict.id
+            return (
+              <div key={dict.id} className="dict-item">
+                <div className="dict-item-top">
+                  <span className="dict-item-name">{dict.name}</span>
+                  <button
+                    type="button"
+                    className="dict-apply-btn"
+                    onClick={() => {
+                      const { translated, untranslated } = applyDictionaryToCategories(categories, dict)
+                      setDictApplyResult({ dictId: dict.id, translated, untranslated })
+                      onLayerCategoricalChange?.(layer.id, { _applyDictionary: true, dictionary: dict })
+                    }}
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                <p className="dict-item-desc">{dict.description}</p>
+                {isApplied && (
+                  <p className="dict-apply-result">
+                    {dictApplyResult.translated} traduïdes
+                    {dictApplyResult.untranslated > 0
+                      ? ` · ${dictApplyResult.untranslated} sense traducció`
+                      : ' · totes reconegudes'}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* GVA preset suggestions */}
       {gvaSuggestions.length > 0 && (

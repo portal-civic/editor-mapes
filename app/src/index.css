@@ -1922,6 +1922,81 @@ button.primary {
   cursor: not-allowed;
 }
 
+/* ─── Dictionary section ────────────────────────────────────────── */
+
+.dict-block {
+  margin-top: 10px;
+  border: 1px solid #b2dfdb;
+  border-radius: 6px;
+  background: #f0fafa;
+  padding: 8px 10px;
+}
+
+.dict-block-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #00796b;
+  margin-bottom: 6px;
+}
+
+.dict-item {
+  padding: 6px 0;
+  border-top: 1px solid #cce8e4;
+}
+
+.dict-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.dict-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dict-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #004d40;
+  flex: 1;
+  min-width: 0;
+}
+
+.dict-apply-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #00796b;
+  background: #fff;
+  color: #00796b;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dict-apply-btn:hover {
+  background: #00796b;
+  color: #fff;
+}
+
+.dict-item-desc {
+  font-size: 11px;
+  color: #555;
+  margin: 3px 0 0;
+  line-height: 1.4;
+}
+
+.dict-apply-result {
+  font-size: 11px;
+  color: #00796b;
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
 /* ─── Map legend overlay ────────────────────────────────────────── */
 
 .map-legend-overlay {
