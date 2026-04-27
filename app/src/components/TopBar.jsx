@@ -187,7 +187,6 @@ function TopBar({
     <header className="topbar">
       {/* LEFT — project zone */}
       <div className="topbar-project">
-        <span className="topbar-logo">MAPES</span>
         <div className="topbar-project-name-wrapper">
           {isEditingName ? (
             <input

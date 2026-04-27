@@ -10,7 +10,6 @@ import SourceImportDialog from './components/SourceImportDialog'
 import ShapefileLayerSelectDialog from './components/ShapefileLayerSelectDialog'
 import GpkgLayerSelectDialog from './components/GpkgLayerSelectDialog'
 import PaletteManagerDialog from './components/PaletteManagerDialog'
-import BearingControls from './components/BearingControls'
 import useMapExport from './hooks/useMapExport'
 import {
   mockLayers,
@@ -1800,10 +1799,7 @@ function App() {
             activeWorkModeId={activeWorkModeId}
             editableLayerGeometryType={editableLayer?.geometryType ?? null}
             onModeChange={handleWorkModeChange}
-          />
-          <BearingControls
             bearing={effectiveBearing}
-            isSelectMode={activeWorkModeId === 'select'}
             onRotate={handleBearingRotate}
             onReset={handleBearingReset}
           />
