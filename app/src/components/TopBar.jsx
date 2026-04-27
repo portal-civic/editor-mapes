@@ -16,6 +16,9 @@ const SEARCH_MIN_CHARS = 3
 const SEARCH_DEBOUNCE_MS = 300
 
 function TopBar({
+  projectName = 'Nou projecte',
+  onProjectNameChange,
+  isDirty = false,
   basemapOptions = [],
   selectedBasemapId = '',
   onBasemapChange,
@@ -37,15 +40,21 @@ function TopBar({
   const [suggestions, setSuggestions] = useState([])
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  // Tracks the last confirmed municipality selection (with geometry) for the "add to layer" action.
   const [currentSelection, setCurrentSelection] = useState(null)
   const [exportTitle, setExportTitle] = useState('')
   const [showLegend, setShowLegend] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showImportMenu, setShowImportMenu] = useState(false)
   const [hdWidth, setHdWidth] = useState('10000')
   const [hdHeight, setHdHeight] = useState('')
   const [hdZoomMode, setHdZoomMode] = useState('auto')
   const [hdManualZoom, setHdManualZoom] = useState('17')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(projectName)
+
+  useEffect(() => {
+    setNameInput(projectName)
+  }, [projectName])
 
   const basemapMaxZoom = useMemo(
     () => basemapOptions.find((b) => b.id === selectedBasemapId)?.maxZoom ?? 19,
@@ -53,15 +62,13 @@ function TopBar({
   )
 
   const exportMenuRef = useRef(null)
+  const importMenuRef = useRef(null)
 
   const canSearch = searchQuery.trim().length >= SEARCH_MIN_CHARS
 
   const searchEndpoint = useMemo(() => {
     const query = searchQuery.trim()
-    if (!query || query.length < SEARCH_MIN_CHARS) {
-      return null
-    }
-
+    if (!query || query.length < SEARCH_MIN_CHARS) return null
     const params = new URLSearchParams({
       format: 'jsonv2',
       countrycodes: 'es',
@@ -71,7 +78,6 @@ function TopBar({
       dedupe: '1',
       q: query,
     })
-
     return `https://nominatim.openstreetmap.org/search?${params.toString()}`
   }, [searchQuery])
 
@@ -82,27 +88,17 @@ function TopBar({
       setIsSearchOpen(false)
       return undefined
     }
-
     const controller = new AbortController()
     const timeoutId = setTimeout(async () => {
       try {
         setIsSearchLoading(true)
         const response = await fetch(searchEndpoint, {
           signal: controller.signal,
-          headers: {
-            Accept: 'application/json',
-          },
+          headers: { Accept: 'application/json' },
         })
-        if (!response.ok) {
-          throw new Error('Nominatim request failed')
-        }
-
+        if (!response.ok) throw new Error('Nominatim request failed')
         const data = await response.json()
-        if (!Array.isArray(data)) {
-          setSuggestions([])
-          return
-        }
-
+        if (!Array.isArray(data)) { setSuggestions([]); return }
         setSuggestions(
           data.map((item) => ({
             placeId: item.place_id,
@@ -114,50 +110,52 @@ function TopBar({
           })),
         )
       } catch (error) {
-        if (error.name !== 'AbortError') {
-          setSuggestions([])
-        }
+        if (error.name !== 'AbortError') setSuggestions([])
       } finally {
         setIsSearchLoading(false)
       }
     }, SEARCH_DEBOUNCE_MS)
-
-    return () => {
-      controller.abort()
-      clearTimeout(timeoutId)
-    }
+    return () => { controller.abort(); clearTimeout(timeoutId) }
   }, [searchEndpoint])
 
   useEffect(() => {
     if (!showExportMenu) return
     const handleOutside = (e) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
-        setShowExportMenu(false)
-      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) setShowExportMenu(false)
     }
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [showExportMenu])
 
+  useEffect(() => {
+    if (!showImportMenu) return
+    const handleOutside = (e) => {
+      if (importMenuRef.current && !importMenuRef.current.contains(e.target)) setShowImportMenu(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showImportMenu])
+
+  const commitName = () => {
+    const trimmed = nameInput.trim() || 'Nou projecte'
+    setIsEditingName(false)
+    setNameInput(trimmed)
+    onProjectNameChange?.(trimmed)
+  }
+
   const handleSuggestionClick = (suggestion) => {
     const hasBoundingBox =
       Array.isArray(suggestion.boundingbox) && suggestion.boundingbox.length === 4
-
     let bounds
     if (hasBoundingBox) {
       const south = Number(suggestion.boundingbox[0])
       const north = Number(suggestion.boundingbox[1])
       const west = Number(suggestion.boundingbox[2])
       const east = Number(suggestion.boundingbox[3])
-
       if ([south, north, west, east].every(Number.isFinite)) {
-        bounds = [
-          [south, west],
-          [north, east],
-        ]
+        bounds = [[south, west], [north, east]]
       }
     }
-
     const selection = {
       label: suggestion.label,
       center: [suggestion.lat, suggestion.lon],
@@ -171,7 +169,6 @@ function TopBar({
         ? selection
         : null,
     )
-
     setSearchQuery(suggestion.label)
     setSuggestions([])
     setIsSearchOpen(false)
@@ -188,91 +185,101 @@ function TopBar({
 
   return (
     <header className="topbar">
-      <div className="brand-block">
-        <p className="eyebrow">Editor de mapes</p>
-        <h1>Projecte actiu: Municipi (placeholder)</h1>
-      </div>
-
-      <div className="topbar-center">
-        <div className="topbar-search">
-          <label className="topbar-field" htmlFor="municipality-search">
-            <span>Municipi</span>
-          </label>
-          <input
-            id="municipality-search"
-            type="text"
-            value={searchQuery}
-            onChange={(event) => {
-              const nextQuery = event.target.value
-              setSearchQuery(nextQuery)
-              setIsSearchOpen(nextQuery.trim().length >= SEARCH_MIN_CHARS)
-              if (!nextQuery.trim()) {
-                onMunicipalitySelect?.(null)
-              }
-            }}
-            onFocus={() => {
-              if (canSearch) {
-                setIsSearchOpen(true)
-              }
-            }}
-            onBlur={() => setIsSearchOpen(false)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                setIsSearchOpen(false)
-              }
-            }}
-            placeholder="Buscar municipi..."
-            autoComplete="off"
-          />
-          {searchQuery.trim() ? (
+      {/* LEFT — project zone */}
+      <div className="topbar-project">
+        <span className="topbar-logo">MAPES</span>
+        <div className="topbar-project-name-wrapper">
+          {isEditingName ? (
+            <input
+              className="topbar-project-name-input"
+              value={nameInput}
+              maxLength={80}
+              autoFocus
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitName() }
+                if (e.key === 'Escape') { setIsEditingName(false); setNameInput(projectName) }
+              }}
+            />
+          ) : (
             <button
               type="button"
-              className="topbar-search-clear"
-              aria-label="Buidar cerca de municipi"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                handleClearMunicipality()
-              }}
+              className="topbar-project-name"
+              title="Fes clic per editar el nom del projecte"
+              onClick={() => setIsEditingName(true)}
             >
-              ×
+              {projectName}
+              {isDirty ? (
+                <span className="topbar-dirty-indicator" title="Hi ha canvis no exportats">●</span>
+              ) : null}
             </button>
-          ) : null}
+          )}
+        </div>
+      </div>
+
+      {/* CENTER — tools */}
+      <div className="topbar-center">
+        <div className="topbar-search">
+          <span className="topbar-search-label">Municipi</span>
+          <div className="topbar-search-inner">
+            <input
+              id="municipality-search"
+              type="text"
+              value={searchQuery}
+              onChange={(event) => {
+                const nextQuery = event.target.value
+                setSearchQuery(nextQuery)
+                setIsSearchOpen(nextQuery.trim().length >= SEARCH_MIN_CHARS)
+                if (!nextQuery.trim()) onMunicipalitySelect?.(null)
+              }}
+              onFocus={() => { if (canSearch) setIsSearchOpen(true) }}
+              onBlur={() => setIsSearchOpen(false)}
+              onKeyDown={(event) => { if (event.key === 'Escape') setIsSearchOpen(false) }}
+              placeholder="Buscar municipi..."
+              autoComplete="off"
+            />
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                className="topbar-search-clear"
+                aria-label="Buidar cerca de municipi"
+                onMouseDown={(event) => { event.preventDefault(); handleClearMunicipality() }}
+              >
+                ×
+              </button>
+            ) : null}
+            {isSearchOpen && canSearch && (isSearchLoading || suggestions.length > 0) ? (
+              <ul className="topbar-search-results">
+                {isSearchLoading ? <li>Cercant...</li> : null}
+                {!isSearchLoading &&
+                  suggestions.map((suggestion) => (
+                    <li key={suggestion.placeId}>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => { event.preventDefault(); handleSuggestionClick(suggestion) }}
+                      >
+                        {suggestion.label}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
+          </div>
           {currentSelection ? (
             <button
               type="button"
               className="topbar-add-layer-btn"
               title={`Afegir el límit de "${currentSelection.label}" com a capa poligonal`}
-              onMouseDown={(event) => {
-                event.preventDefault()
-                onAddMunicipalityLayer?.(currentSelection)
-              }}
+              onMouseDown={(event) => { event.preventDefault(); onAddMunicipalityLayer?.(currentSelection) }}
             >
               + Capa
             </button>
           ) : null}
-          {isSearchOpen && canSearch && (isSearchLoading || suggestions.length > 0) ? (
-            <ul className="topbar-search-results">
-              {isSearchLoading ? <li>Cercant...</li> : null}
-              {!isSearchLoading &&
-                suggestions.map((suggestion) => (
-                  <li key={suggestion.placeId}>
-                    <button
-                      type="button"
-                      onMouseDown={(event) => {
-                        event.preventDefault()
-                        handleSuggestionClick(suggestion)
-                      }}
-                    >
-                      {suggestion.label}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          ) : null}
         </div>
 
-        <label className="topbar-field">
-          <span>Mapa base</span>
+        <div className="topbar-basemap">
+          <span className="topbar-basemap-label">Mapa base</span>
           <select
             value={selectedBasemapId}
             onChange={(event) => onBasemapChange?.(event.target.value)}
@@ -291,86 +298,110 @@ function TopBar({
               </optgroup>
             ))}
           </select>
-        </label>
+        </div>
       </div>
 
+      {/* RIGHT — actions */}
       <div className="topbar-right">
-        <button type="button" onClick={onOpenProject}>
+        <button type="button" className="topbar-btn" onClick={onOpenProject}>
           Obrir
         </button>
-        <button type="button" onClick={onImportGeoJSON}>
-          Importar GeoJSON
-        </button>
-        <button type="button" onClick={onImportShapefile}>
-          Importar SHP
-        </button>
-        <button type="button" onClick={onImportGpkg}>
-          Importar GPKG
-        </button>
 
-        <div className="export-dropdown-wrapper" ref={exportMenuRef}>
+        {/* Import dropdown */}
+        <div className="topbar-dropdown-wrapper" ref={importMenuRef}>
           <button
             type="button"
-            className="primary"
+            className="topbar-btn"
+            onClick={() => setShowImportMenu((v) => !v)}
+          >
+            Importar ▾
+          </button>
+          {showImportMenu ? (
+            <div className="topbar-dropdown-panel">
+              <div className="topbar-dropdown-section">Dades vectorials</div>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onImportGeoJSON?.(); setShowImportMenu(false) }}
+              >
+                GeoJSON
+              </button>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onImportShapefile?.(); setShowImportMenu(false) }}
+              >
+                Shapefile (SHP)
+              </button>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onImportGpkg?.(); setShowImportMenu(false) }}
+              >
+                GeoPackage (GPKG)
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Export dropdown */}
+        <div className="topbar-dropdown-wrapper" ref={exportMenuRef}>
+          <button
+            type="button"
+            className="topbar-btn topbar-btn--primary"
             onClick={() => setShowExportMenu((v) => !v)}
           >
             Exportar ▾
           </button>
           {showExportMenu ? (
-            <div className="export-dropdown-panel">
+            <div className="topbar-dropdown-panel topbar-dropdown-panel--right">
+              <div className="topbar-dropdown-section">Projecte</div>
               <button
                 type="button"
-                onClick={() => {
-                  onExportProject?.()
-                  setShowExportMenu(false)
-                }}
+                className="topbar-dropdown-item"
+                onClick={() => { onExportProject?.(); setShowExportMenu(false) }}
               >
-                Exportar projecte
+                Guardar projecte (.json)
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onExportWebProject?.()
-                  setShowExportMenu(false)
-                }}
+                className="topbar-dropdown-item"
+                onClick={() => { onExportWebProject?.(); setShowExportMenu(false) }}
               >
                 Exportar projecte web
               </button>
-              <div className="export-dropdown-divider" />
+
+              <div className="topbar-dropdown-divider" />
+              <div className="topbar-dropdown-section">Dades</div>
               <button
                 type="button"
-                onClick={() => {
-                  onExportVisibleGeoJSON?.()
-                  setShowExportMenu(false)
-                }}
+                className="topbar-dropdown-item"
+                onClick={() => { onExportVisibleGeoJSON?.(); setShowExportMenu(false) }}
               >
                 Exportar GeoJSON visible
               </button>
-              <div className="export-dropdown-divider" />
               <button
                 type="button"
-                onClick={() => {
-                  onExportAllLayers?.()
-                  setShowExportMenu(false)
-                }}
+                className="topbar-dropdown-item"
+                onClick={() => { onExportAllLayers?.(); setShowExportMenu(false) }}
               >
-                Exportar capes visibles per a Affinity (prova)
+                Exportar capes (Affinity)
               </button>
+
+              <div className="topbar-dropdown-divider" />
+              <div className="topbar-dropdown-section">Imatge</div>
               <button
                 type="button"
-                onClick={() => {
-                  onExportPDFSimple?.()
-                  setShowExportMenu(false)
-                }}
+                className="topbar-dropdown-item"
+                onClick={() => { onExportPDFSimple?.(); setShowExportMenu(false) }}
               >
                 Exportar PDF (prova)
               </button>
-              <div className="export-dropdown-divider" />
               <div className="export-dropdown-png">
                 <input
                   type="text"
                   className="topbar-export-title"
-                  placeholder="Títol del PNG..."
+                  placeholder={`Títol PNG (per defecte: ${projectName})`}
                   value={exportTitle}
                   onChange={(event) => setExportTitle(event.target.value)}
                   maxLength={120}
@@ -385,15 +416,17 @@ function TopBar({
                 </label>
                 <button
                   type="button"
+                  className="topbar-dropdown-item topbar-dropdown-item--cta"
                   onClick={() => {
-                    onExportPNG?.({ title: exportTitle, showLegend })
+                    onExportPNG?.({ title: exportTitle || projectName, showLegend })
                     setShowExportMenu(false)
                   }}
                 >
                   Exportar PNG
                 </button>
               </div>
-              <div className="export-dropdown-divider" />
+
+              <div className="topbar-dropdown-divider" />
               <div className="export-dropdown-hd">
                 <div className="export-dropdown-hd-row">
                   <input
@@ -432,10 +465,7 @@ function TopBar({
                       name="hdZoomMode"
                       value="manual"
                       checked={hdZoomMode === 'manual'}
-                      onChange={() => {
-                        setHdZoomMode('manual')
-                        setHdManualZoom(String(basemapMaxZoom))
-                      }}
+                      onChange={() => { setHdZoomMode('manual'); setHdManualZoom(String(basemapMaxZoom)) }}
                     />
                     Manual
                   </label>
@@ -458,6 +488,7 @@ function TopBar({
                 )}
                 <button
                   type="button"
+                  className="topbar-dropdown-item topbar-dropdown-item--cta"
                   onClick={() => {
                     onExportBasemapHD?.({
                       targetWidth: parseInt(hdWidth) || 10000,
@@ -468,7 +499,7 @@ function TopBar({
                     setShowExportMenu(false)
                   }}
                 >
-                  Exportar basemap HD PNG
+                  Exportar basemap HD
                 </button>
               </div>
             </div>

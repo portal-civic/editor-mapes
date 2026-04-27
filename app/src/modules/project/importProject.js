@@ -1,5 +1,24 @@
 import { normalizeLayerStyle, ensureInitialPointLayer, normalizeFeature } from '../layers'
 import { normalizeLegendLayout } from '../legend/legendLayout'
+import { storeDatasetFeatures } from '../sources/sourceStore'
+
+// Repopulates the sourceStore from the datasets block saved in the project file.
+// Returns the list of datasetIds that were successfully restored.
+// Safe to call with old project files that lack a datasets block — returns [].
+export function restoreProjectDatasets(parsedData) {
+  const raw = parsedData?.datasets
+  if (!raw || typeof raw !== 'object') return []
+
+  const restored = []
+  for (const [datasetId, dataset] of Object.entries(raw)) {
+    if (typeof datasetId === 'string' && Array.isArray(dataset?.features)) {
+      // storeDatasetFeatures brands each feature with a non-enumerable _srcIdx
+      storeDatasetFeatures(datasetId, dataset.features)
+      restored.push(datasetId)
+    }
+  }
+  return restored
+}
 
 export function isValidProjectData(parsedData) {
   return (

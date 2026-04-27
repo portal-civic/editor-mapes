@@ -32,6 +32,7 @@ import {
   normalizeImportedGroups,
   normalizeImportedPalettes,
   normalizeImportedLegendLayout,
+  restoreProjectDatasets,
   downloadWebProject,
 } from './modules/project'
 import { buildLayerSVG } from './modules/export/exportSVG'
@@ -134,6 +135,8 @@ function App() {
   const [mapViewport, setMapViewport] = useState(null)
   // selectedSourceFeature: clicked feature from an imported source layer
   const [selectedSourceFeature, setSelectedSourceFeature] = useState(null)
+  // projectName: editable inline in TopBar; used for export filename and default PNG title
+  const [projectName, setProjectName] = useState('Nou projecte')
 
   const selectedBasemap = useMemo(
     () =>
@@ -520,6 +523,19 @@ function App() {
   }
 
   const handleExportProject = () => {
+    // Collect GeoJSON features from the external sourceStore for every source layer.
+    // _srcIdx is non-enumerable so JSON.stringify omits it automatically — the
+    // serialized features are clean GeoJSON with no internal metadata.
+    const datasetsPayload = {}
+    for (const layer of layers) {
+      if (layer.type === 'source' && layer.datasetId) {
+        const features = getDatasetFeatures(layer.datasetId)
+        if (features.length > 0) {
+          datasetsPayload[layer.datasetId] = { type: 'geojson', features }
+        }
+      }
+    }
+
     const projectData = buildProjectData({
       mapView: { ...mapView, bearing },
       selectedBasemapId,
@@ -529,13 +545,15 @@ function App() {
       groups,
       projectPalettes,
       legendLayout,
+      datasets: datasetsPayload,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
     const blob = new Blob([jsonContent], { type: 'application/json' })
     const downloadUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = downloadUrl
-    link.download = 'editor-mapes-project.json'
+    const safeFileName = (projectName || 'projecte').replace(/[^a-z0-9À-ú\s._-]/gi, '').trim().replace(/\s+/g, '-').toLowerCase() || 'projecte'
+    link.download = `${safeFileName}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -732,10 +750,27 @@ function App() {
 
       const importedProject = parsedData.project
 
-      setLayers(normalizeImportedLayers(importedProject.layers))
+      // Restore external sourceStore before setting layer state so that
+      // getDatasetFeatures(datasetId) works immediately after layers are set.
+      restoreProjectDatasets(parsedData)
+
+      const normalizedLayers = normalizeImportedLayers(importedProject.layers)
+      setLayers(normalizedLayers)
       setGroups(normalizeImportedGroups(importedProject.groups))
       setProjectPalettes(normalizeImportedPalettes(importedProject.palettes))
       setLegendLayout(normalizeImportedLegendLayout(importedProject.legendLayout))
+
+      // Rebuild lightweight datasets metadata so layer deletion cleans up correctly.
+      setDatasets(
+        normalizedLayers
+          .filter((l) => l.type === 'source' && l.datasetId)
+          .map((l) => ({
+            id: l.datasetId,
+            sourceId: l.sourceId ?? null,
+            featureCount: getDatasetFeatures(l.datasetId).length,
+            options: {},
+          })),
+      )
       setBearing(typeof importedProject.mapView?.bearing === 'number' ? importedProject.mapView.bearing : 0)
       // Support new format (editableLayerId) and old format (activePointLayerId etc.)
       setEditableLayerId(
@@ -779,6 +814,10 @@ function App() {
       } else {
         setActiveWorkModeId('select')
       }
+
+      // Derive project name from filename (strip extension)
+      const rawName = selectedFile.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim()
+      if (rawName) setProjectName(rawName)
     } catch {
       window.alert("No s'ha pogut llegir el fitxer de projecte")
     } finally {
@@ -1720,6 +1759,8 @@ function App() {
         />
       ) : null}
       <TopBar
+        projectName={projectName}
+        onProjectNameChange={setProjectName}
         basemapOptions={basemapOptions}
         selectedBasemapId={selectedBasemap.id}
         onBasemapChange={setSelectedBasemapId}
