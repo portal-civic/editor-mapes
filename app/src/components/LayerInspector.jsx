@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import IconPicker from './IconPicker'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
-import { normalizeCategory } from '../modules/sources/categoricalStyle'
+import { normalizeCategory, normalizeCategoricalStyle } from '../modules/sources/categoricalStyle'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
 import { suggestGvaPresets, GVA_GROUPS } from '../modules/presets/gva'
 import {
@@ -434,6 +434,78 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
           ))}
         </div>
       ) : null}
+
+      {/* Global categorical style */}
+      {categories.length > 0 ? (() => {
+        const cs = normalizeCategoricalStyle(layer.categorical?.categoricalStyle)
+        const updateCs = (patch) =>
+          onLayerCategoricalChange?.(layer.id, {
+            _updateCatStyle: true,
+            categoricalStyle: { ...cs, ...patch },
+          })
+        return (
+          <div className="cat-global-style">
+            <p className="catdiag-dist-title">Estil global de categories</p>
+            <label className="cat-gs-row">
+              <span>Opacitat farcit</span>
+              <input
+                type="range" min="0" max="1" step="0.05"
+                value={cs.fillOpacity}
+                onChange={(e) => updateCs({ fillOpacity: Number(e.target.value) })}
+              />
+              <span className="cat-gs-val">{Math.round(cs.fillOpacity * 100)}%</span>
+            </label>
+            <label className="cat-gs-row">
+              <span>Contorn</span>
+              <select
+                value={cs.strokeMode}
+                onChange={(e) => updateCs({ strokeMode: e.target.value })}
+              >
+                <option value="category">Color de categoria</option>
+                <option value="fixed">Color fix</option>
+              </select>
+            </label>
+            {cs.strokeMode === 'fixed' ? (
+              <label className="cat-gs-row">
+                <span>Color contorn fix</span>
+                <input
+                  type="color"
+                  value={cs.fixedStrokeColor}
+                  onChange={(e) => updateCs({ fixedStrokeColor: e.target.value })}
+                />
+              </label>
+            ) : null}
+            <label className="cat-gs-row">
+              <span>Opacitat contorn</span>
+              <input
+                type="range" min="0" max="1" step="0.05"
+                value={cs.strokeOpacity}
+                onChange={(e) => updateCs({ strokeOpacity: Number(e.target.value) })}
+              />
+              <span className="cat-gs-val">{Math.round(cs.strokeOpacity * 100)}%</span>
+            </label>
+            <label className="cat-gs-row">
+              <span>Amplada contorn</span>
+              <input
+                type="number" min="0" max="20" step="0.5"
+                value={cs.strokeWidth}
+                onChange={(e) => updateCs({ strokeWidth: Number(e.target.value) || 0 })}
+              />
+            </label>
+            <label className="cat-gs-row">
+              <span>Estil línia</span>
+              <select
+                value={cs.dashStyle}
+                onChange={(e) => updateCs({ dashStyle: e.target.value })}
+              >
+                <option value="solid">Contínua</option>
+                <option value="dashed">Discontínua</option>
+                <option value="dotted">Puntejada</option>
+              </select>
+            </label>
+          </div>
+        )
+      })() : null}
 
       {/* Legend settings */}
       {categories.length > 0 ? (

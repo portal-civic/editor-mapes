@@ -21,6 +21,7 @@ import { resolveFaIcon } from '../icons/faIconResolver'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { filterByViewportBbox } from '../modules/sources/bboxFilter'
 import { leafletStyleForCategory } from '../modules/sources/categoricalStyle'
+import { getFeatureKey } from '../modules/sources/featureKey'
 import MapLegendOverlay from './MapLegendOverlay'
 
 const DEFAULT_CENTER = [40.4168, -3.7038]
@@ -74,12 +75,12 @@ function MapClickHandler({
   return null
 }
 
-function MapCursorHandler({ isDrawMode }) {
+function MapCursorHandler({ isDrawMode, hasSelectableSourceLayers }) {
   const map = useMap()
 
   useEffect(() => {
     const container = map.getContainer()
-    const cursorValue = isDrawMode ? 'crosshair' : ''
+    const cursorValue = isDrawMode ? 'crosshair' : hasSelectableSourceLayers ? 'pointer' : ''
 
     container.style.cursor = cursorValue
     container.querySelectorAll('.leaflet-pane, .leaflet-interactive').forEach((el) => {
@@ -94,7 +95,7 @@ function MapCursorHandler({ isDrawMode }) {
           el.style.cursor = ''
         })
     }
-  }, [isDrawMode, map])
+  }, [isDrawMode, hasSelectableSourceLayers, map])
 
   return null
 }
@@ -244,6 +245,11 @@ function MapLayerPanes({ orderedLayerIds }) {
     // pointer-events are none on the mask polygon so clicks pass through.
     const maskPane = ensurePane('mask-pane', rotateContainer)
     maskPane.style.zIndex = '490'
+
+    // selection-pane: highlight ring for selected source features. Above source
+    // layers (420–450) and mask-pane (490), below markers (600).
+    const selectionPane = ensurePane('selection-pane', rotateContainer)
+    selectionPane.style.zIndex = '495'
   }, [map, orderedLayerIds])
 
   return null
@@ -267,22 +273,117 @@ function getOuterRings(latlngs) {
 }
 
 function getLayerStyleSignature(layer) {
+  let base
   if (layer.styleMode === 'categorical' && layer.categorical?.field) {
-    const { field, categories = [] } = layer.categorical
-    // Include color, visibility and legend order so any edit triggers remount
+    const { field, categories = [], categoricalStyle } = layer.categorical
     const colorStr = categories
       .map((c) => `${c.value}:${c.color ?? c.style?.color ?? ''}:${c.visible !== false ? 1 : 0}`)
       .join('|')
-    return `cat:${field}:${colorStr}`
+    const cs = categoricalStyle ?? {}
+    const styleStr = `${cs.fillOpacity}:${cs.strokeOpacity}:${cs.strokeWidth}:${cs.dashStyle}:${cs.strokeMode}:${cs.fixedStrokeColor}`
+    base = `cat:${field}:${colorStr}:${styleStr}`
+  } else {
+    const s = layer.style ?? {}
+    if (layer.geometryType === 'polygon') {
+      base = `s:${s.strokeColor}:${s.strokeWidth}:${s.strokeOpacity}:${s.fillColor}:${s.fillOpacity}:${s.dashStyle}`
+    } else if (layer.geometryType === 'line') {
+      base = `s:${s.color}:${s.width}:${s.opacity}:${s.dashStyle}`
+    } else {
+      base = `s:${s.fillColor}:${s.fillOpacity}:${s.strokeColor}:${s.strokeWidth}:${s.size}`
+    }
   }
-  const s = layer.style ?? {}
-  if (layer.geometryType === 'polygon') {
-    return `s:${s.strokeColor}:${s.strokeWidth}:${s.strokeOpacity}:${s.fillColor}:${s.fillOpacity}:${s.dashStyle}`
+  const ovEntries = Object.entries(layer.featureOverrides ?? {})
+  if (ovEntries.length > 0) {
+    const ovStr = ovEntries
+      .map(([k, v]) => `${k}:${v?.fillColor ?? ''}:${v?.fillOpacity ?? ''}:${v?.strokeColor ?? ''}:${v?.strokeOpacity ?? ''}:${v?.strokeWidth ?? ''}`)
+      .join('|')
+    return `${base}:ov:${ovStr}`
   }
-  if (layer.geometryType === 'line') {
-    return `s:${s.color}:${s.width}:${s.opacity}:${s.dashStyle}`
+  return base
+}
+
+function applyFeatureOverride(baseStyle, override, geometryType) {
+  if (!override) return baseStyle
+  const merged = { ...baseStyle }
+  // Only apply a field when it is explicitly set (not undefined, not empty string).
+  // undefined !== '' evaluates to true, which caused NaN to be written to opacity/weight.
+  const has = (v) => v != null && v !== ''
+  if (has(override.fillColor)) merged.fillColor = override.fillColor
+  if (has(override.fillOpacity)) merged.fillOpacity = Number(override.fillOpacity)
+  if (has(override.strokeColor)) merged.color = override.strokeColor
+  if (has(override.strokeOpacity)) merged.opacity = Number(override.strokeOpacity)
+  if (has(override.strokeWidth)) merged.weight = Number(override.strokeWidth)
+  return merged
+}
+
+// ─── Point-in-polygon (GeoJSON coordinate space: [lng, lat]) ─────────────────
+
+function pointInRing(pt, ring) {
+  const [x, y] = pt
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside
+    }
   }
-  return `s:${s.fillColor}:${s.fillOpacity}:${s.strokeColor}:${s.strokeWidth}:${s.size}`
+  return inside
+}
+
+function pointInGeoJSONPolygon(pt, coords) {
+  if (!pointInRing(pt, coords[0])) return false
+  for (let i = 1; i < coords.length; i++) {
+    if (pointInRing(pt, coords[i])) return false // inside a hole
+  }
+  return true
+}
+
+function pointInGeoJSONFeature(pt, geometry) {
+  if (!geometry) return false
+  if (geometry.type === 'Polygon') return pointInGeoJSONPolygon(pt, geometry.coordinates)
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.some((coords) => pointInGeoJSONPolygon(pt, coords))
+  }
+  return false
+}
+
+// ─── Map-level click handler for source layer feature selection ───────────────
+// Keeps source layers interactive:false (canvas/pane issues avoided) and
+// does hit-testing on the raw GeoJSON data instead.
+
+function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeatureClick }) {
+  const map = useMap()
+  useMapEvents({
+    click(e) {
+      if (!isSelectMode) return
+      const { lat, lng } = e.latlng
+      const pt = [lng, lat] // GeoJSON order: [longitude, latitude]
+
+      const bounds = map.getBounds()
+      const viewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+
+      // Iterate layers top-to-bottom (last in array = highest z-order rendered first)
+      for (const layer of [...sourceLayers].reverse()) {
+        if (layer.geometryType !== 'polygon') continue
+        const allFeatures = getDatasetFeatures(layer.datasetId) ?? []
+        // Pre-filter to viewport to keep hit-testing fast
+        const candidates = filterByViewportBbox(allFeatures, viewport)
+        for (const feature of candidates) {
+          if (pointInGeoJSONFeature(pt, feature?.geometry)) {
+            // getFeatureKey uses _srcIdx (embedded by storeDatasetFeatures) for stable key
+            const key = getFeatureKey(feature)
+            console.log('[source select] key:', key, '| override:', layer.featureOverrides?.[key] ?? 'none') // debug
+            onSourceFeatureClick?.({ layerId: layer.id, featureKey: key, feature })
+            return
+          }
+        }
+      }
+      // Click on empty space — deselect
+      onSourceFeatureClick?.(null)
+    },
+  })
+  return null
 }
 
 function SourceLayerRenderer({ layer, pane }) {
@@ -315,35 +416,44 @@ function SourceLayerRenderer({ layer, pane }) {
     return m
   }, [isCategorical, layer.categorical])
 
+  const catStyle = isCategorical ? layer.categorical?.categoricalStyle : null
+
   const getFeatureStyle = useCallback(
     (feature) => {
+      const fKey = getFeatureKey(feature)
+      const override = layer.featureOverrides?.[fKey]
+      if (override) console.log('[render] override applied for key:', fKey, override) // debug
+
+      let base
       if (isCategorical && categoryMap) {
         const val = feature?.properties?.[layer.categorical.field]
-        const key = val == null ? '__null__' : String(val)
-        return leafletStyleForCategory(categoryMap.get(key), layer.geometryType)
-      }
-      const s = layer.style || {}
-      if (layer.geometryType === 'polygon') {
-        return {
-          color: s.strokeColor || layer.color || '#2f7de1',
-          weight: s.strokeWidth ?? 2,
-          opacity: s.strokeOpacity ?? 1,
-          fillColor: s.fillColor || layer.color || '#2f7de1',
-          fillOpacity: s.fillOpacity ?? 0.18,
-          dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+        const catKey = val == null ? '__null__' : String(val)
+        base = leafletStyleForCategory(categoryMap.get(catKey), layer.geometryType, catStyle)
+      } else {
+        const s = layer.style || {}
+        if (layer.geometryType === 'polygon') {
+          base = {
+            color: s.strokeColor || layer.color || '#2f7de1',
+            weight: s.strokeWidth ?? 2,
+            opacity: s.strokeOpacity ?? 1,
+            fillColor: s.fillColor || layer.color || '#2f7de1',
+            fillOpacity: s.fillOpacity ?? 0.18,
+            dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+          }
+        } else if (layer.geometryType === 'line') {
+          base = {
+            color: s.color || layer.color || '#ea8b1f',
+            weight: s.width || 3,
+            opacity: s.opacity ?? 1,
+            dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
+          }
+        } else {
+          base = {}
         }
       }
-      if (layer.geometryType === 'line') {
-        return {
-          color: s.color || layer.color || '#ea8b1f',
-          weight: s.width || 3,
-          opacity: s.opacity ?? 1,
-          dashArray: s.dashStyle === 'dashed' ? '10,8' : s.dashStyle === 'dotted' ? '2,8' : undefined,
-        }
-      }
-      return {}
+      return applyFeatureOverride(base, override, layer.geometryType)
     },
-    [isCategorical, categoryMap, layer],
+    [isCategorical, categoryMap, layer, catStyle],
   )
 
   const pointToLayer = useCallback(
@@ -351,8 +461,9 @@ function SourceLayerRenderer({ layer, pane }) {
       if (isCategorical && categoryMap) {
         const val = feature?.properties?.[layer.categorical.field]
         const key = val == null ? '__null__' : String(val)
-        const opts = leafletStyleForCategory(categoryMap.get(key), 'point')
-        return L.circleMarker(latlng, opts)
+        const base = leafletStyleForCategory(categoryMap.get(key), 'point', catStyle)
+        const override = layer.featureOverrides?.[getFeatureKey(feature)]
+        return L.circleMarker(latlng, applyFeatureOverride(base, override, 'point'))
       }
       const s = layer.style || {}
       const radius = s.size ? Math.max(1, s.size / 2) : 6
@@ -365,7 +476,7 @@ function SourceLayerRenderer({ layer, pane }) {
         opacity: s.strokeOpacity ?? 1,
       })
     },
-    [isCategorical, categoryMap, layer],
+    [isCategorical, categoryMap, layer, catStyle],
   )
 
   if (!geojsonData.features.length) return null
@@ -410,6 +521,8 @@ function MapCanvas({
   onDraftPolygonPointAdd,
   onViewChange,
   onMapReady,
+  onSourceFeatureClick,
+  selectedSourceFeature = null,
   legendEntries = [],
   legendLayout = null,
 }) {
@@ -614,7 +727,12 @@ function MapCanvas({
         <BearingSync bearing={bearing} />
         <MapInstanceBridge onMapReady={onMapReady} />
         <MapLayerPanes orderedLayerIds={visibleLayerOrder} />
-        <MapCursorHandler isDrawMode={isDrawMode} />
+        <MapCursorHandler
+          isDrawMode={isDrawMode}
+          hasSelectableSourceLayers={
+            isSelectMode && sourceLayers.some((l) => l.geometryType === 'polygon')
+          }
+        />
         <MapViewSync
           center={mapCenter}
           zoom={mapZoom}
@@ -650,6 +768,12 @@ function MapCanvas({
           />
         ) : null}
 
+        <MapSourceFeatureClickHandler
+          sourceLayers={sourceLayers}
+          isSelectMode={isSelectMode}
+          onSourceFeatureClick={onSourceFeatureClick}
+        />
+
         {sourceLayers.map((layer) => (
           <SourceLayerRenderer
             key={layer.id}
@@ -657,6 +781,24 @@ function MapCanvas({
             pane={layerPanesById[layer.id]}
           />
         ))}
+
+        {selectedSourceFeature?.feature ? (
+          <GeoJSON
+            key={`sel-${selectedSourceFeature.layerId}-${selectedSourceFeature.featureKey}`}
+            data={{ type: 'FeatureCollection', features: [selectedSourceFeature.feature] }}
+            style={() => ({
+              color: '#1e40af',
+              weight: 3,
+              opacity: 1,
+              fill: true,
+              fillColor: '#3b82f6',
+              fillOpacity: 0.18,
+              dashArray: undefined,
+            })}
+            pane="selection-pane"
+            interactive={false}
+          />
+        ) : null}
 
         {lineFeatures.map((lineFeature) => {
           const isSelected = isSelectedFeature(lineFeature)

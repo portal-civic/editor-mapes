@@ -71,6 +71,7 @@ import { getDatasetFeatures } from './modules/sources/sourceStore'
 import { filterByViewportBbox } from './modules/sources/bboxFilter'
 import LegendPanel from './components/LegendPanel'
 import LegendConfigPanel from './components/LegendConfigPanel'
+import SelectedSourceFeaturePanel from './components/SelectedSourceFeaturePanel'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -131,6 +132,8 @@ function App() {
   const [legendLayout, setLegendLayout] = useState(DEFAULT_LEGEND_LAYOUT)
   // mapViewport: [west, south, east, north] updated on map moveend — used for viewport filtering
   const [mapViewport, setMapViewport] = useState(null)
+  // selectedSourceFeature: clicked feature from an imported source layer
+  const [selectedSourceFeature, setSelectedSourceFeature] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -397,6 +400,42 @@ function App() {
       return { center, zoom }
     })
     if (bounds) setMapViewport(bounds)
+  }
+
+  const handleSourceFeatureClick = (payload) => {
+    if (!payload) {
+      setSelectedSourceFeature(null)
+      return
+    }
+    const { layerId, featureKey, feature } = payload
+    setSelectedSourceFeature({ layerId, featureKey, feature })
+    setRightPanelTab('layer')
+  }
+
+  const handleSourceFeatureDeselect = () => {
+    setSelectedSourceFeature(null)
+  }
+
+  const handleFeatureOverrideChange = (layerId, featureKey, partial) => {
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id !== layerId) return l
+        if (partial === null) {
+          const { [featureKey]: _removed, ...rest } = l.featureOverrides ?? {}
+          return { ...l, featureOverrides: rest }
+        }
+        return {
+          ...l,
+          featureOverrides: {
+            ...(l.featureOverrides ?? {}),
+            [featureKey]: {
+              ...(l.featureOverrides?.[featureKey] ?? {}),
+              ...partial,
+            },
+          },
+        }
+      }),
+    )
   }
 
   // Converts a GeoJSON Polygon/MultiPolygon geometry to the Leaflet latlngs format
@@ -1218,7 +1257,16 @@ function App() {
           const next = applyPaletteToCategories(current, partial.paletteId, partial.invert ?? false, allPalettes)
           return { ...l, categorical: { ...(l.categorical ?? {}), categories: next } }
         }
-        const { _generate: _g, _applyPalette: _ap, ...rest } = partial
+        if (partial._updateCatStyle) {
+          return {
+            ...l,
+            categorical: {
+              ...(l.categorical ?? {}),
+              categoricalStyle: { ...(l.categorical?.categoricalStyle ?? {}), ...partial.categoricalStyle },
+            },
+          }
+        }
+        const { _generate: _g, _applyPalette: _ap, _updateCatStyle: _ucs, ...rest } = partial
         return { ...l, categorical: { ...(l.categorical ?? {}), ...rest } }
       }),
     )
@@ -1784,6 +1832,8 @@ function App() {
                 onDraftPolygonPointAdd={handleDraftPolygonPointAdd}
                 onViewChange={handleMapViewChange}
                 onMapReady={handleMapReady}
+                onSourceFeatureClick={handleSourceFeatureClick}
+                selectedSourceFeature={selectedSourceFeature}
                 focusMask={focusMask}
                 legendEntries={showExternalLegend ? [] : legendEntries}
                 legendLayout={legendLayout}
@@ -1831,7 +1881,16 @@ function App() {
           </div>
 
           {rightPanelTab === 'layer' ? (
-            selectedFeatureData ? (
+            selectedSourceFeature ? (
+              <SelectedSourceFeaturePanel
+                key={`${selectedSourceFeature.layerId}-${selectedSourceFeature.featureKey}`}
+                feature={selectedSourceFeature.feature}
+                featureKey={selectedSourceFeature.featureKey}
+                layer={layers.find((l) => l.id === selectedSourceFeature.layerId)}
+                onClose={handleSourceFeatureDeselect}
+                onFeatureOverrideChange={handleFeatureOverrideChange}
+              />
+            ) : selectedFeatureData ? (
               <FeatureInspector
                 key={`${selectedFeatureData.layer.id}-${selectedFeatureData.feature.id}`}
                 feature={selectedFeatureData.feature}

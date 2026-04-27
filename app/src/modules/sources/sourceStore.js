@@ -18,6 +18,16 @@ export function removeSource(sourceId) {
 }
 
 export function storeDatasetFeatures(datasetId, features) {
+  // Brand each feature with its stable dataset index (non-enumerable → invisible to
+  // JSON.stringify, Object.keys, attribute panels). Used by getFeatureKey so that
+  // features without an explicit ID field still get a consistent _idx_N key.
+  features.forEach((f, i) => {
+    if (f != null && typeof f === 'object' && !Object.prototype.hasOwnProperty.call(f, '_srcIdx')) {
+      Object.defineProperty(f, '_srcIdx', {
+        value: i, enumerable: false, configurable: false, writable: false,
+      })
+    }
+  })
   _datasetFeatures.set(datasetId, features)
 }
 

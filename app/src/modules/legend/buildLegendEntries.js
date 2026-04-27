@@ -1,4 +1,4 @@
-import { normalizeCategory } from '../sources/categoricalStyle'
+import { normalizeCategory, normalizeCategoricalStyle } from '../sources/categoricalStyle'
 import { resolveLegendLabel } from './legendLayout'
 
 // ─── Per-layer legend entry ───────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export function buildLegendEntry(layer, options = {}) {
 
   if (layer.styleMode === 'categorical' && layer.categorical?.categories?.length > 0) {
     const geom = layer.geometryType
+    const cs = normalizeCategoricalStyle(layer.categorical?.categoricalStyle)
     let cats = layer.categorical.categories
       .map((c, i) => normalizeCategory(c, i))
       .filter((c) => c.legendVisible !== false)
@@ -43,12 +44,30 @@ export function buildLegendEntry(layer, options = {}) {
       cats = [...cats].sort((a, b) => (a.legendOrder ?? 0) - (b.legendOrder ?? 0))
     }
 
-    if (cats.length === 0) return null
+    // Feature override rows (showInLegend: true) — appended after categories
+    const overrideRows = Object.entries(layer.featureOverrides ?? {})
+      .filter(([, ov]) => ov?.showInLegend)
+      .map(([key, ov]) => ({
+        label: ov.legendLabel || key,
+        geometryType: geom,
+        style: {
+          fillColor: ov.fillColor || '#888888',
+          fillOpacity: ov.fillOpacity !== '' && ov.fillOpacity != null ? Number(ov.fillOpacity) : cs.fillOpacity,
+          strokeColor: ov.strokeColor || cs.fixedStrokeColor || '#333333',
+          strokeWidth: ov.strokeWidth !== '' && ov.strokeWidth != null ? Number(ov.strokeWidth) : cs.strokeWidth,
+          strokeOpacity: ov.strokeOpacity !== '' && ov.strokeOpacity != null ? Number(ov.strokeOpacity) : cs.strokeOpacity,
+        },
+      }))
+
+    if (cats.length === 0 && overrideRows.length === 0) return null
+    if (cats.length === 0) return { title, rows: overrideRows }
 
     const rows = cats.map((cat) => {
       const color = cat.color ?? '#888888'
       const fill = cat.fillColor ?? color
-      const stroke = cat.strokeColor ?? color
+      const effectiveStroke = cs.strokeMode === 'fixed'
+        ? cs.fixedStrokeColor
+        : (cat.strokeColor ?? color)
       const resolvedLabel = resolveLegendLabel(cat.label, language) || String(cat.value)
       const label = showCounts && cat.count > 0
         ? `${resolvedLabel} (${cat.count.toLocaleString()})`
@@ -56,17 +75,30 @@ export function buildLegendEntry(layer, options = {}) {
 
       let style
       if (geom === 'polygon') {
-        style = { fillColor: fill, fillOpacity: 0.35, strokeColor: stroke, strokeWidth: 2, strokeOpacity: 1 }
+        style = {
+          fillColor: fill,
+          fillOpacity: cs.fillOpacity,
+          strokeColor: effectiveStroke,
+          strokeWidth: cs.strokeWidth,
+          strokeOpacity: cs.strokeOpacity,
+          dashStyle: cs.dashStyle,
+        }
       } else if (geom === 'line') {
-        style = { color: stroke, width: 3, opacity: 1 }
+        style = { color: fill, width: cs.strokeWidth, opacity: cs.strokeOpacity, dashStyle: cs.dashStyle }
       } else {
-        style = { fillColor: fill, fillOpacity: 0.9, strokeColor: stroke, strokeWidth: 2, radius: 6 }
+        style = {
+          fillColor: fill,
+          fillOpacity: cs.fillOpacity,
+          strokeColor: effectiveStroke,
+          strokeWidth: cs.strokeWidth,
+          radius: 6,
+        }
       }
 
       return { label, geometryType: geom, style }
     })
 
-    return { title, rows }
+    return { title, rows: [...rows, ...overrideRows] }
   }
 
   // Single-style layer
