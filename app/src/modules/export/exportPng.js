@@ -1,7 +1,7 @@
 import { waitNextFrame, downloadBlob } from './utils'
 import { waitForTiles, drawTiles, drawCanvasLayers, drawMarkerLayers } from './drawLayers'
 import { drawLegend, drawLegendColumn, drawLegendBar } from './drawLegend'
-import { drawTitle } from './drawTitle'
+import { drawTitle, drawTitleBlock, TITLE_BAR_H } from './drawTitle'
 import { drawNorthArrow } from './drawNorth'
 import { drawScaleBar } from './drawScale'
 import { normalizeLegendLayout } from '../legend/legendLayout'
@@ -9,11 +9,11 @@ import { normalizeLegendLayout } from '../legend/legendLayout'
 // Compute the height needed for a bottom legend bar based on entries and layout.
 function computeBarHeight(legendEntries, layout) {
   const { fontSize = 11, padding: pad = 12 } = layout
-  const rowH = Math.max(22, fontSize * 2.1)
-  const titleH = Math.max(16, fontSize * 1.9)
+  const rowH = Math.max(22, fontSize * 2.2)
+  const titleH = Math.max(18, fontSize * 1.8)
   let maxRows = 0
   for (const entry of legendEntries) {
-    const extra = entry.rows.length > 1 ? 1 : 0 // title row
+    const extra = entry.rows.length > 1 ? 1 : 0
     maxRows = Math.max(maxRows, entry.rows.length + extra)
   }
   return pad * 2 + maxRows * rowH + (maxRows > 0 ? titleH : 0)
@@ -22,9 +22,7 @@ function computeBarHeight(legendEntries, layout) {
 export async function exportMapAsPNG({
   map,
   fileName = 'editor-mapes.png',
-  // Pre-computed legend entries from App.jsx (already filtered by language/viewport)
   legendEntries = [],
-  // Layout configuration
   legendLayout = null,
   title = '',
 }) {
@@ -32,7 +30,6 @@ export async function exportMapAsPNG({
 
   await new Promise((resolve) => map.whenReady(resolve))
 
-  // Temporarily reset bearing so tile capture works correctly.
   const originalBearing = typeof map.getBearing === 'function' ? map.getBearing() : 0
   if (originalBearing !== 0 && typeof map.setBearing === 'function') {
     map.setBearing(0)
@@ -58,6 +55,20 @@ export async function exportMapAsPNG({
   await waitForTiles(mapContainer)
   await waitNextFrame()
 
+  // ── Preload web fonts so canvas ctx.font renders correctly ────────────────
+  const layout = normalizeLegendLayout(legendLayout)
+  const fontFamilyRaw = layout.fontFamily || 'Inter, sans-serif'
+  // Extract the first named font family (strip quotes, commas, generics)
+  const fontFamilyName = fontFamilyRaw.split(',')[0].replace(/['"]/g, '').trim()
+  const isWebFont = !['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'system-ui'].includes(fontFamilyName)
+  if (isWebFont && typeof document !== 'undefined' && document.fonts) {
+    await Promise.allSettled([
+      document.fonts.load(`400 ${layout.fontSize}px "${fontFamilyName}"`),
+      document.fonts.load(`500 ${layout.fontSize}px "${fontFamilyName}"`),
+      document.fonts.load(`500 ${layout.titleFontSize}px "${fontFamilyName}"`),
+    ])
+  }
+
   // ── Stage 1: Capture map into a temporary canvas ──────────────────────────
   const mapCanvas = document.createElement('canvas')
   mapCanvas.width = mapW
@@ -69,29 +80,45 @@ export async function exportMapAsPNG({
   drawCanvasLayers(mapCtx, mapContainer, containerRect)
   await drawMarkerLayers(mapCtx, mapContainer)
 
-  // ── Stage 2: Compose final export canvas ─────────────────────────────────
-  const layout = normalizeLegendLayout(legendLayout)
+  // ── Stage 2: Compute export layout ───────────────────────────────────────
+  // (layout already computed above for font preloading)
   const pos = layout.position
   const entries = pos === 'none' ? [] : legendEntries
 
-  let exportW = mapW
-  let exportH = mapH
-  let mapOffsetX = 0
-  let mapOffsetY = 0
+  const margin = layout.margin ?? 0
+  const hasTitle = Boolean(title && title.trim())
+  // titlePosition only applies when there is an actual title
+  const titlePos = hasTitle ? (layout.titlePosition ?? 'floating') : 'floating'
+
+  // 'above-legend' only makes sense with a column legend; otherwise fall back to 'above-map'
+  const effectiveTitlePos = (titlePos === 'above-legend' && pos !== 'right' && pos !== 'left')
+    ? 'above-map'
+    : titlePos
+
+  // Height reserved for an integrated title strip above the map area
+  const aboveMapTitleH = effectiveTitlePos === 'above-map' ? TITLE_BAR_H : 0
+  // Height reserved inside the legend column for the title
+  const aboveLegendTitleH = effectiveTitlePos === 'above-legend' ? TITLE_BAR_H : 0
+
   let legendColW = 0
   let legendBarH = 0
 
-  if (pos === 'right') {
+  if (pos === 'right' || pos === 'left') {
     legendColW = layout.width
-    exportW = mapW + legendColW
-  } else if (pos === 'left') {
-    legendColW = layout.width
-    exportW = mapW + legendColW
-    mapOffsetX = legendColW
   } else if (pos === 'bottom') {
     legendBarH = computeBarHeight(entries, layout)
-    exportH = mapH + legendBarH
   }
+
+  const exportW = margin + (pos === 'left' ? legendColW : 0) + mapW + (pos === 'right' ? legendColW : 0) + margin
+  const exportH = margin + aboveMapTitleH + mapH + legendBarH + margin
+
+  const mapOffsetX = margin + (pos === 'left' ? legendColW : 0)
+  const mapOffsetY = margin + aboveMapTitleH
+
+  // Legend column geometry
+  const legendColX = pos === 'right' ? mapOffsetX + mapW : margin
+  const legendColY = margin
+  const legendColH = exportH - margin * 2
 
   const exportCanvas = document.createElement('canvas')
   exportCanvas.width = exportW
@@ -99,31 +126,49 @@ export async function exportMapAsPNG({
   const ctx = exportCanvas.getContext('2d')
   if (!ctx) throw new Error('Failed to acquire export canvas context')
 
-  // White base
+  // White base (covers margins)
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, exportW, exportH)
+
+  // ── Integrated title strip (above-map) ───────────────────────────────────
+  if (effectiveTitlePos === 'above-map' && hasTitle) {
+    const stripW = exportW - margin * 2
+    drawTitleBlock(ctx, margin, margin, stripW, TITLE_BAR_H, title, layout.fontFamily)
+  }
 
   // Draw map
   ctx.drawImage(mapCanvas, mapOffsetX, mapOffsetY)
 
-  // Draw legend
+  // ── Legend ───────────────────────────────────────────────────────────────
   if (entries.length > 0) {
-    if (pos === 'right') {
-      drawLegendColumn(ctx, mapW, 0, legendColW, mapH, entries, layout)
-    } else if (pos === 'left') {
-      drawLegendColumn(ctx, 0, 0, legendColW, mapH, entries, layout)
+    if (pos === 'right' || pos === 'left') {
+      // Title-in-legend: draw title block at top of column, then legend below
+      if (effectiveTitlePos === 'above-legend' && hasTitle) {
+        drawTitleBlock(ctx, legendColX, legendColY, legendColW, aboveLegendTitleH, title, layout.fontFamily)
+      }
+      drawLegendColumn(
+        ctx,
+        legendColX,
+        legendColY + aboveLegendTitleH,
+        legendColW,
+        legendColH - aboveLegendTitleH,
+        entries,
+        layout,
+      )
     } else if (pos === 'bottom') {
-      drawLegendBar(ctx, 0, mapH, exportW, legendBarH, entries, layout)
+      drawLegendBar(ctx, margin, mapOffsetY + mapH, exportW - margin * 2, legendBarH, entries, layout)
     } else {
-      // 'inside': overlay on bottom-right of map area
-      drawLegend(ctx, mapOffsetX + mapW, mapH, entries, layout)
+      // 'inside': floating overlay on the map
+      drawLegend(ctx, mapOffsetX + mapW, mapOffsetY + mapH, entries, layout)
     }
   }
 
-  // Map overlays (title, north arrow, scale bar) — positioned relative to map area
+  // ── Map overlays (floating title, north arrow, scale bar) ────────────────
   ctx.save()
   ctx.translate(mapOffsetX, mapOffsetY)
-  drawTitle(ctx, mapW, title)
+  if (effectiveTitlePos === 'floating') {
+    drawTitle(ctx, mapW, title, layout.fontFamily)
+  }
   drawNorthArrow(ctx, mapW)
   drawScaleBar(ctx, map, mapH)
   ctx.restore()
@@ -133,7 +178,6 @@ export async function exportMapAsPNG({
   )
   if (!pngBlob) throw new Error('Failed to create PNG blob')
 
-  // Restore original bearing
   if (originalBearing !== 0 && typeof map.setBearing === 'function') {
     map.setBearing(originalBearing)
   }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 html,
 body,
@@ -2101,7 +2101,7 @@ button.primary {
 .legend-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   min-height: 100%;
 }
 
@@ -2109,7 +2109,7 @@ button.primary {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 16px;
+  gap: 20px;
 }
 
 .legend-panel-empty {
@@ -2121,16 +2121,16 @@ button.primary {
 .legend-col-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .legend-col-group-title {
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  letter-spacing: 0.01em;
   margin-bottom: 3px;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .legend-col-row {
@@ -2141,8 +2141,10 @@ button.primary {
 }
 
 .legend-col-label {
-  color: #1f2937;
-  line-height: 1.3;
+  font-size: 10px;
+  font-weight: 400;
+  color: #222;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -2183,6 +2185,15 @@ button.primary {
   margin: 4px 0;
 }
 
+.legend-cfg-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin: 2px 0 4px;
+}
+
 .legend-cfg-check {
   display: flex;
   align-items: center;
@@ -2220,22 +2231,22 @@ button.primary {
 .map-legend-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .map-legend-group + .map-legend-group {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid #e8ecf1;
 }
 
 .map-legend-group-title {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #94a3b8;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  letter-spacing: 0.01em;
   margin-bottom: 3px;
+  line-height: 1.4;
 }
 
 .map-legend-row {
@@ -2273,9 +2284,10 @@ button.primary {
 }
 
 .map-legend-label {
-  font-size: 0.775rem;
-  color: #1f2937;
-  line-height: 1.3;
+  font-size: 10px;
+  font-weight: 400;
+  color: #222;
+  line-height: 1.5;
 }
 
 /* ─── Layer groups ──────────────────────────────────────────────── */
@@ -2677,7 +2689,7 @@ button.primary {
 .cat-editor-header,
 .cat-editor-row {
   display: grid;
-  grid-template-columns: 22px 52px 1fr 28px 18px 18px 36px;
+  grid-template-columns: 14px 20px 48px 1fr 26px 16px 16px 34px;
   align-items: center;
   gap: 4px;
   padding: 3px 5px;
@@ -2783,6 +2795,103 @@ button.primary {
   background: #e2e8f0;
 }
 
+/* ── Drag handle ──────────────────────────────────────────────────────── */
+
+.cat-col-drag {
+  cursor: grab;
+  color: #b0bec5;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+  user-select: none;
+}
+
+.cat-col-drag:active {
+  cursor: grabbing;
+}
+
+.cat-editor-row--dragging {
+  opacity: 0.35;
+}
+
+.cat-editor-row--dropover {
+  border-top: 2px solid #3b82f6;
+}
+
+/* ── Quick actions ────────────────────────────────────────────────────── */
+
+.cat-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.cat-quick-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #c8d0db;
+  border-radius: 4px;
+  background: #f4f7fb;
+  color: #3e4c5f;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.cat-quick-btn:hover {
+  background: #deeaf8;
+  border-color: #4a7dbc;
+  color: #1e3a5f;
+}
+
+/* ── Feature overrides list ───────────────────────────────────────────── */
+
+.cat-overrides-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cat-override-row {
+  display: grid;
+  grid-template-columns: 12px 1fr 16px auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.cat-override-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+
+.cat-override-key {
+  font-size: 11px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cat-override-label {
+  font-size: 11px;
+  padding: 2px 5px;
+  border: 1px solid #c8d0db;
+  border-radius: 3px;
+  width: 90px;
+  background: #fff;
+}
+
+.cat-override-label:focus {
+  outline: none;
+  border-color: #4a7dbc;
+}
+
 /* ── Legend settings ──────────────────────────────────────────────────── */
 
 .cat-legend-section {
@@ -2825,6 +2934,29 @@ button.primary {
   height: 14px;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+/* ─── Legend count threshold ────────────────────────────────────────────── */
+.cat-legend-threshold {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e9eef5;
+}
+
+.cat-legend-threshold-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.cat-legend-threshold-row input[type='number'] {
+  width: 48px;
+  font-size: 0.76rem;
+  padding: 2px 4px;
+  border: 1px solid #c8d0db;
+  border-radius: 4px;
+  text-align: right;
 }
 
 /* ─── Global categorical style section ─────────────────────────────────── */

@@ -14,9 +14,11 @@ export function buildLegendEntry(layer, options = {}) {
   if (layer.legend?.visible === false) return null
 
   const language = options.language ?? 'val'
+  const showLayerNames = options.showLayerNames !== false
   const visibleValues = options.visibleValuesByLayerId?.[layer.id] // Set | undefined
 
-  const title = layer.legend?.title || layer.legendLabel || layer.name || ''
+  const rawTitle = layer.legend?.title || layer.legendLabel || layer.name || ''
+  const title = showLayerNames ? rawTitle : ''
   const showCounts = layer.legend?.showCounts === true
   const orderMode = layer.legend?.orderMode ?? 'manual'
 
@@ -44,6 +46,15 @@ export function buildLegendEntry(layer, options = {}) {
       cats = [...cats].sort((a, b) => (a.legendOrder ?? 0) - (b.legendOrder ?? 0))
     }
 
+    // Hide categories below a count threshold; optionally group them as "Altres"
+    const hideMinCount = layer.legend?.hideMinCount ?? 0
+    const groupSmallCategories = layer.legend?.groupSmallCategories === true
+    let smallCats = []
+    if (hideMinCount > 0) {
+      smallCats = cats.filter((c) => (c.count ?? 0) <= hideMinCount)
+      cats = cats.filter((c) => (c.count ?? 0) > hideMinCount)
+    }
+
     // Feature override rows (showInLegend: true) — appended after categories
     const overrideRows = Object.entries(layer.featureOverrides ?? {})
       .filter(([, ov]) => ov?.showInLegend)
@@ -59,8 +70,9 @@ export function buildLegendEntry(layer, options = {}) {
         },
       }))
 
-    if (cats.length === 0 && overrideRows.length === 0) return null
-    if (cats.length === 0) return { title, rows: overrideRows }
+    const hasContent = cats.length > 0 || (groupSmallCategories && smallCats.length > 0) || overrideRows.length > 0
+    if (!hasContent) return null
+    if (cats.length === 0 && !groupSmallCategories) return overrideRows.length > 0 ? { title, rows: overrideRows } : null
 
     const rows = cats.map((cat) => {
       const color = cat.color ?? '#888888'
@@ -98,6 +110,20 @@ export function buildLegendEntry(layer, options = {}) {
       return { label, geometryType: geom, style }
     })
 
+    // "Altres" group: summarises categories below the count threshold
+    if (groupSmallCategories && smallCats.length > 0) {
+      const altresCount = smallCats.reduce((s, c) => s + (c.count ?? 0), 0)
+      const altresLabel = showCounts && altresCount > 0
+        ? `Altres (${altresCount.toLocaleString()})`
+        : `Altres (${smallCats.length})`
+      const altresStyle = geom === 'polygon'
+        ? { fillColor: '#9ca3af', fillOpacity: cs.fillOpacity, strokeColor: '#6b7280', strokeWidth: cs.strokeWidth, strokeOpacity: cs.strokeOpacity }
+        : geom === 'line'
+          ? { color: '#9ca3af', width: cs.strokeWidth, opacity: cs.strokeOpacity }
+          : { fillColor: '#9ca3af', fillOpacity: cs.fillOpacity, strokeColor: '#6b7280', strokeWidth: cs.strokeWidth, radius: 6 }
+      rows.push({ label: altresLabel, geometryType: geom, style: altresStyle })
+    }
+
     return { title, rows: [...rows, ...overrideRows] }
   }
 
@@ -115,3 +141,4 @@ export function buildLegendEntries(layers, options = {}) {
     .filter(Boolean)
     .filter((e) => e.rows.length > 0)
 }
+

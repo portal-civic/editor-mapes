@@ -258,9 +258,10 @@ function App() {
   const legendEntries = useMemo(
     () => buildLegendEntries(layers, {
       language: legendLayout.language,
+      showLayerNames: legendLayout.showLayerNames !== false,
       visibleValuesByLayerId,
     }),
-    [layers, legendLayout.language, visibleValuesByLayerId],
+    [layers, legendLayout.language, legendLayout.showLayerNames, visibleValuesByLayerId],
   )
 
   const allPalettes = useMemo(() => {
@@ -1911,6 +1912,7 @@ function App() {
                 onLayerStyleModeChange={handleLayerStyleModeChange}
                 onLayerCategoricalChange={handleLayerCategoricalChange}
                 onLayerLegendChange={handleLayerLegendChange}
+                onFeatureOverrideChange={handleFeatureOverrideChange}
                 projectPalettes={projectPalettes}
                 onManagePalettes={() => setShowPaletteManager(true)}
                 onMoveLayerUp={handleMoveLayerUp}

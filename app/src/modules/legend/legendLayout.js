@@ -1,18 +1,24 @@
 export const DEFAULT_LEGEND_LAYOUT = {
   position: 'inside',   // 'inside' | 'right' | 'left' | 'bottom' | 'none'
-  width: 220,           // column width in px (right/left) or bar height (bottom)
-  fontFamily: 'sans-serif',
+  width: 220,           // column width in px (right/left)
+  fontFamily: 'Inter, sans-serif',
   fontSize: 11,
-  titleFontSize: 10,
+  titleFontSize: 12,    // legend group-title font size (px)
   background: '#ffffff',
   border: true,
   padding: 12,
   showOnlyVisibleInViewport: false,
+  showLayerNames: true,
   language: 'val',      // 'val' | 'cas' | 'eng'
+  // export layout
+  margin: 0,            // page-margin around the whole composition (px)
+  titlePosition: 'floating', // 'floating' | 'above-map' | 'above-legend'
+  maxLegendRows: 0,     // 0 = unlimited; >0 wraps legend to 2 cols in export
 }
 
 const VALID_POSITIONS = ['inside', 'right', 'left', 'bottom', 'none']
 const VALID_LANGUAGES = ['val', 'cas', 'eng']
+const VALID_TITLE_POSITIONS = ['floating', 'above-map', 'above-legend']
 
 export function normalizeLegendLayout(raw) {
   const d = DEFAULT_LEGEND_LAYOUT
@@ -29,7 +35,12 @@ export function normalizeLegendLayout(raw) {
     padding: typeof raw.padding === 'number' && raw.padding >= 0 ? raw.padding : d.padding,
     showOnlyVisibleInViewport: typeof raw.showOnlyVisibleInViewport === 'boolean'
       ? raw.showOnlyVisibleInViewport : d.showOnlyVisibleInViewport,
+    showLayerNames: typeof raw.showLayerNames === 'boolean' ? raw.showLayerNames : d.showLayerNames,
     language: VALID_LANGUAGES.includes(raw.language) ? raw.language : d.language,
+    margin: typeof raw.margin === 'number' && raw.margin >= 0 ? Math.min(Math.floor(raw.margin), 80) : d.margin,
+    titlePosition: VALID_TITLE_POSITIONS.includes(raw.titlePosition) ? raw.titlePosition : d.titlePosition,
+    maxLegendRows: typeof raw.maxLegendRows === 'number' && raw.maxLegendRows >= 0
+      ? Math.floor(raw.maxLegendRows) : d.maxLegendRows,
   }
 }
 

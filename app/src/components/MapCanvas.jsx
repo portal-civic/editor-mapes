@@ -373,7 +373,6 @@ function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeat
           if (pointInGeoJSONFeature(pt, feature?.geometry)) {
             // getFeatureKey uses _srcIdx (embedded by storeDatasetFeatures) for stable key
             const key = getFeatureKey(feature)
-            console.log('[source select] key:', key, '| override:', layer.featureOverrides?.[key] ?? 'none') // debug
             onSourceFeatureClick?.({ layerId: layer.id, featureKey: key, feature })
             return
           }
@@ -422,8 +421,6 @@ function SourceLayerRenderer({ layer, pane }) {
     (feature) => {
       const fKey = getFeatureKey(feature)
       const override = layer.featureOverrides?.[fKey]
-      if (override) console.log('[render] override applied for key:', fKey, override) // debug
-
       let base
       if (isCategorical && categoryMap) {
         const val = feature?.properties?.[layer.categorical.field]

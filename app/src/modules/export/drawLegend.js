@@ -74,29 +74,37 @@ function wrapText(ctx, text, maxWidth) {
   return lines.length > 0 ? lines : [text]
 }
 
+// Count renderable rows across all entries (title rows + data rows)
+function countTotalRows(entries) {
+  let n = 0
+  for (const entry of entries) {
+    if (entry.rows.length > 1) n++ // group title counts as a row
+    n += entry.rows.length
+  }
+  return n
+}
+
 // ─── Overlay mode (inside the map, bottom-right corner) ───────────────────────
-// legendEntries: [{ title: string, rows: [{ label, geometryType, style }] }]
 
 export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout = {}) {
   if (!legendEntries || legendEntries.length === 0) return
 
   const {
-    fontFamily = 'sans-serif',
+    fontFamily = 'Inter, sans-serif',
     fontSize = 11,
-    titleFontSize = 10,
+    titleFontSize = 12,
     padding: pad = 12,
   } = layout
 
-  const rowH = 24
+  const rowH = 20
   const titleH = 18
-  const iconW = 28
-  const gap = 8
-  const groupGap = 6
+  const iconW = 26
+  const gap = 7
+  const groupGap = 12
 
   ctx.save()
   ctx.font = `${fontSize}px ${fontFamily}`
 
-  // Build flat render list + measure max text width
   const items = []
   let maxTextWidth = 0
 
@@ -125,7 +133,6 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout
   const bx = canvasWidth - boxW - margin
   const by = canvasHeight - boxH - margin
 
-  // Background box
   ctx.fillStyle = 'rgba(255,255,255,0.92)'
   ctx.strokeStyle = 'rgba(0,0,0,0.15)'
   ctx.lineWidth = 1
@@ -135,7 +142,6 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout
   ctx.fill()
   ctx.stroke()
 
-  // Render items
   let curY = by + pad
   items.forEach((item) => {
     if (item.type === 'gap') {
@@ -144,20 +150,19 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout
     }
     if (item.type === 'title') {
       ctx.globalAlpha = 1
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = `600 ${titleFontSize}px ${fontFamily}`
+      ctx.fillStyle = '#666666'
+      ctx.font = `500 ${titleFontSize}px ${fontFamily}`
       ctx.textBaseline = 'middle'
       ctx.setLineDash([])
-      ctx.fillText(item.text.toUpperCase(), bx + pad, curY + titleH / 2)
+      ctx.fillText(item.text, bx + pad, curY + titleH / 2)
       curY += titleH
       return
     }
-    // row
     const iconCenterY = curY + rowH / 2
     drawRowIcon(ctx, item, bx + pad, iconCenterY, iconW, rowH)
     ctx.globalAlpha = 1
-    ctx.fillStyle = '#222'
-    ctx.font = `${fontSize}px ${fontFamily}`
+    ctx.fillStyle = '#222222'
+    ctx.font = `400 ${fontSize}px ${fontFamily}`
     ctx.textBaseline = 'middle'
     ctx.setLineDash([])
     ctx.fillText(item.label, bx + pad + iconW + gap, iconCenterY)
@@ -168,33 +173,65 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout
 }
 
 // ─── Column mode (side panel in PNG export) ───────────────────────────────────
-// Fills a rectangular column area with white background + legend entries.
-// Text is word-wrapped to fit within the column width.
+// When maxLegendRows > 0 and total rows exceed the limit, entries are split
+// into two equal sub-columns within the same colW.
 
 export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, layout = {}) {
   if (!legendEntries || legendEntries.length === 0) return
 
   const {
-    fontFamily = 'sans-serif',
+    fontFamily = 'Inter, sans-serif',
     fontSize = 11,
-    titleFontSize = 10,
+    titleFontSize = 12,
     background = '#ffffff',
     border = true,
     padding: pad = 14,
+    maxLegendRows = 0,
   } = layout
+
+  // Multi-column: split into 2 sub-columns when over the row limit
+  if (maxLegendRows > 0 && countTotalRows(legendEntries) > maxLegendRows) {
+    const halfCount = Math.ceil(legendEntries.length / 2)
+    const leftEntries = legendEntries.slice(0, halfCount)
+    const rightEntries = legendEntries.slice(halfCount)
+    const halfW = Math.floor(colW / 2)
+    // Background + border drawn once for the full area
+    ctx.save()
+    ctx.fillStyle = background
+    ctx.fillRect(colX, colY, colW, colH)
+    if (border) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.14)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.moveTo(colX, colY)
+      ctx.lineTo(colX, colY + colH)
+      ctx.stroke()
+      // Divider between sub-columns
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)'
+      ctx.beginPath()
+      ctx.moveTo(colX + halfW, colY + pad)
+      ctx.lineTo(colX + halfW, colY + colH - pad)
+      ctx.stroke()
+    }
+    ctx.restore()
+    const noDecorLayout = { ...layout, background: 'transparent', border: false, maxLegendRows: 0 }
+    drawLegendColumn(ctx, colX, colY, halfW, colH, leftEntries, noDecorLayout)
+    if (rightEntries.length > 0) {
+      drawLegendColumn(ctx, colX + halfW, colY, halfW, colH, rightEntries, noDecorLayout)
+    }
+    return
+  }
 
   ctx.save()
 
-  // Clip to column bounds to prevent overflow
   ctx.beginPath()
   ctx.rect(colX, colY, colW, colH)
   ctx.clip()
 
-  // Background
   ctx.fillStyle = background
   ctx.fillRect(colX, colY, colW, colH)
 
-  // Border on the side that faces the map (left border for right column)
   if (border) {
     ctx.strokeStyle = 'rgba(0,0,0,0.14)'
     ctx.lineWidth = 1
@@ -205,35 +242,33 @@ export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, lay
     ctx.stroke()
   }
 
-  const iconW = Math.max(20, fontSize * 1.8)
+  const iconW = Math.max(18, fontSize * 1.7)
   const gap = 7
   const textW = colW - pad * 2 - iconW - gap
-  const rowH = Math.max(22, fontSize * 2.1)
-  const titleH = Math.max(16, titleFontSize * 1.9)
-  const lineSpacing = fontSize * 1.4
+  const rowH = Math.max(18, fontSize + 7)
+  const titleH = Math.max(16, titleFontSize + 6)
+  const lineSpacing = fontSize * 1.5
 
   let curY = colY + pad
 
   for (let ei = 0; ei < legendEntries.length; ei++) {
     const entry = legendEntries[ei]
-    if (ei > 0) curY += 10
+    if (ei > 0) curY += 12
 
-    // Group title (only when multiple rows)
     if (entry.rows.length > 1) {
       ctx.globalAlpha = 1
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = `600 ${titleFontSize}px ${fontFamily}`
+      ctx.fillStyle = '#666666'
+      ctx.font = `500 ${titleFontSize}px ${fontFamily}`
       ctx.textBaseline = 'middle'
       ctx.setLineDash([])
-      ctx.fillText((entry.title || '').toUpperCase(), colX + pad, curY + titleH / 2)
-      curY += titleH
+      ctx.fillText(entry.title || '', colX + pad, curY + titleH / 2)
+      curY += titleH + 3
     }
 
-    // Rows
     for (const row of entry.rows) {
-      if (curY >= colY + colH - 4) break // overflow guard
+      if (curY >= colY + colH - 4) break
 
-      ctx.font = `${fontSize}px ${fontFamily}`
+      ctx.font = `400 ${fontSize}px ${fontFamily}`
       const lines = wrapText(ctx, row.label || '', Math.max(textW, 20))
       const rowActualH = lines.length > 1 ? lines.length * lineSpacing + 4 : rowH
       const iconCenterY = curY + Math.min(rowH, rowActualH) / 2
@@ -241,8 +276,8 @@ export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, lay
       drawRowIcon(ctx, row, colX + pad, iconCenterY, iconW, rowH)
 
       ctx.globalAlpha = 1
-      ctx.fillStyle = '#1f2937'
-      ctx.font = `${fontSize}px ${fontFamily}`
+      ctx.fillStyle = '#222222'
+      ctx.font = `400 ${fontSize}px ${fontFamily}`
       ctx.textBaseline = 'top'
       ctx.setLineDash([])
 
@@ -253,7 +288,7 @@ export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, lay
         ctx.fillText(lines[li], textX, textStartY + li * lineSpacing)
       }
 
-      curY += rowActualH
+      curY += rowActualH + 4
     }
   }
 
@@ -261,14 +296,11 @@ export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, lay
 }
 
 // ─── Horizontal bar mode (bottom strip in PNG export) ────────────────────────
-// Entries are laid out in columns side-by-side within a horizontal strip.
 
 export function drawLegendBar(ctx, barX, barY, barW, barH, legendEntries, layout = {}) {
   if (!legendEntries || legendEntries.length === 0) return
 
   const {
-    fontFamily = 'sans-serif',
-    fontSize = 11,
     background = '#ffffff',
     border = true,
     padding: pad = 12,
@@ -293,12 +325,10 @@ export function drawLegendBar(ctx, barX, barY, barW, barH, legendEntries, layout
     ctx.stroke()
   }
 
-  // Split entries into columns of equal width
   const count = legendEntries.length
   const colW = Math.floor((barW - pad) / Math.max(count, 1))
 
   legendEntries.forEach((entry, ei) => {
-    // Draw each entry as a mini-column
     drawLegendColumn(
       ctx,
       barX + ei * colW,

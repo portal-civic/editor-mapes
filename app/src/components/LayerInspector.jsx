@@ -11,7 +11,7 @@ import {
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
 
-function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange, projectPalettes = [], onManagePalettes }) {
+function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange, onFeatureOverrideChange, projectPalettes = [], onManagePalettes }) {
   const fields = layer.meta?.fields ?? []
   const categorical = layer.categorical ?? {}
   const field = categorical.field ?? ''
@@ -25,6 +25,8 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
 
   const [selectedPaletteId, setSelectedPaletteId] = useState('default')
   const [showGvaPresets, setShowGvaPresets] = useState(false)
+  const [dragIndex, setDragIndex] = useState(null)
+  const [dropIndex, setDropIndex] = useState(null)
 
   // Sample values per field (up to 30 unique values each, from first 300 features)
   const sampleValues = useMemo(() => {
@@ -104,6 +106,50 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
     ;[next[index], next[t]] = [next[t], next[index]]
     updateCategories(next)
   }
+
+  // ── Quick actions ─────────────────────────────────────────────────────────
+  const hideAllLegend = () =>
+    updateCategories(categories.map((c) => ({ ...c, legendVisible: false })))
+  const showAllLegend = () =>
+    updateCategories(categories.map((c) => ({ ...c, legendVisible: true })))
+  const syncLegendToMap = () =>
+    updateCategories(categories.map((c) => ({ ...c, legendVisible: c.visible !== false })))
+  const sortAlpha = () =>
+    updateCategories(
+      [...categories].sort((a, b) =>
+        String(a.label || a.value || '').localeCompare(String(b.label || b.value || '')),
+      ),
+    )
+  const sortByCount = () =>
+    updateCategories([...categories].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)))
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  const handleDragStart = (e, i) => {
+    setDragIndex(i)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+  const handleDragOver = (e, i) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (i !== dropIndex) setDropIndex(i)
+  }
+  const handleDrop = (e, i) => {
+    e.preventDefault()
+    if (dragIndex !== null && dragIndex !== i) {
+      const next = [...categories]
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(i, 0, moved)
+      updateCategories(next)
+    }
+    setDragIndex(null)
+    setDropIndex(null)
+  }
+  const handleDragEnd = () => { setDragIndex(null); setDropIndex(null) }
+
+  // ── Feature overrides helper ──────────────────────────────────────────────
+  const updateOverride = (featureKey, partial) =>
+    onFeatureOverrideChange?.(layer.id, featureKey, partial)
 
   return (
     <>
@@ -344,77 +390,93 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
         </div>
       ) : null}
 
-      {/* Category editor list */}
+      {/* Quick actions + category editor list */}
       {categories.length > 0 ? (
-        <div className="cat-editor-list">
-          <div className="cat-editor-header">
-            <span className="cat-col-color" />
-            <span className="cat-col-value">Valor</span>
-            <span className="cat-col-label">Etiqueta</span>
-            <span className="cat-col-count" title="Features">#</span>
-            <span className="cat-col-vis" title="Visible al mapa">👁</span>
-            <span className="cat-col-leg" title="Visible a la llegenda">☰</span>
-            <span className="cat-col-order" />
+        <>
+          <div className="cat-quick-actions">
+            <button type="button" className="cat-quick-btn" onClick={showAllLegend} title="Mostrar totes a la llegenda">Mostrar</button>
+            <button type="button" className="cat-quick-btn" onClick={hideAllLegend} title="Ocultar totes de la llegenda">Ocultar</button>
+            <button type="button" className="cat-quick-btn" onClick={syncLegendToMap} title="Llegenda = visibilitat mapa">↕ Mapa</button>
+            <button type="button" className="cat-quick-btn" onClick={sortAlpha} title="Ordenar per nom">A→Z</button>
+            <button type="button" className="cat-quick-btn" onClick={sortByCount} title="Ordenar per recompte descendent"># ↓</button>
           </div>
-          <div className="cat-editor-rows">
-            {categories.map((cat, i) => (
-              <div
-                key={cat.value == null ? '__null__' : String(cat.value)}
-                className={`cat-editor-row${cat.visible === false ? ' cat-editor-row--hidden' : ''}`}
-              >
-                <input
-                  type="color"
-                  className="cat-col-color"
-                  value={cat.color ?? '#888888'}
-                  onChange={(e) => updateCat(i, { color: e.target.value })}
-                  title="Color principal"
-                />
-                <span
-                  className="cat-col-value"
-                  title={cat.value == null ? '(buit)' : String(cat.value)}
-                >
-                  {cat.value == null ? '—' : String(cat.value)}
-                </span>
-                <input
-                  type="text"
-                  className="cat-col-label"
-                  value={cat.label}
-                  onChange={(e) => updateCat(i, { label: e.target.value })}
-                  placeholder="Etiqueta…"
-                />
-                <span className="cat-col-count">{cat.count || ''}</span>
-                <input
-                  type="checkbox"
-                  className="cat-col-vis"
-                  checked={cat.visible !== false}
-                  onChange={(e) => updateCat(i, { visible: e.target.checked })}
-                  title="Visible al mapa"
-                />
-                <input
-                  type="checkbox"
-                  className="cat-col-leg"
-                  checked={cat.legendVisible !== false}
-                  onChange={(e) => updateCat(i, { legendVisible: e.target.checked })}
-                  title="Visible a la llegenda"
-                />
-                <span className="cat-col-order">
-                  <button
-                    type="button"
-                    onClick={() => moveCategory(i, -1)}
-                    disabled={i === 0}
-                    aria-label="Pujar"
-                  >↑</button>
-                  <button
-                    type="button"
-                    onClick={() => moveCategory(i, 1)}
-                    disabled={i === categories.length - 1}
-                    aria-label="Baixar"
-                  >↓</button>
-                </span>
-              </div>
-            ))}
+          <div className="cat-editor-list">
+            <div className="cat-editor-header">
+              <span className="cat-col-drag" />
+              <span className="cat-col-color" />
+              <span className="cat-col-value">Valor</span>
+              <span className="cat-col-label">Etiqueta</span>
+              <span className="cat-col-count" title="Features">#</span>
+              <span className="cat-col-vis" title="Visible al mapa">👁</span>
+              <span className="cat-col-leg" title="Visible a la llegenda">☰</span>
+              <span className="cat-col-order" />
+            </div>
+            <div className="cat-editor-rows">
+              {categories.map((cat, i) => {
+                const rowKey = cat.value == null ? '__null__' : String(cat.value)
+                const isDragging = dragIndex === i
+                const isDropOver = dropIndex === i && dragIndex !== null && dragIndex !== i
+                return (
+                  <div
+                    key={rowKey}
+                    className={[
+                      'cat-editor-row',
+                      cat.visible === false ? 'cat-editor-row--hidden' : '',
+                      isDragging ? 'cat-editor-row--dragging' : '',
+                      isDropOver ? 'cat-editor-row--dropover' : '',
+                    ].filter(Boolean).join(' ')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, i)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDrop={(e) => handleDrop(e, i)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <span className="cat-col-drag" title="Arrossega per reordenar">⠿</span>
+                    <input
+                      type="color"
+                      className="cat-col-color"
+                      value={cat.color ?? '#888888'}
+                      onChange={(e) => updateCat(i, { color: e.target.value })}
+                      title="Color principal"
+                    />
+                    <span
+                      className="cat-col-value"
+                      title={cat.value == null ? '(buit)' : String(cat.value)}
+                    >
+                      {cat.value == null ? '—' : String(cat.value)}
+                    </span>
+                    <input
+                      type="text"
+                      className="cat-col-label"
+                      value={typeof cat.label === 'string' ? cat.label : String(cat.label ?? '')}
+                      onChange={(e) => updateCat(i, { label: e.target.value })}
+                      placeholder={cat.value == null ? '(buit)' : String(cat.value)}
+                    />
+                    <span className="cat-col-count">{cat.count || ''}</span>
+                    <input
+                      type="checkbox"
+                      className="cat-col-vis"
+                      checked={cat.visible !== false}
+                      onChange={(e) => updateCat(i, { visible: e.target.checked })}
+                      title="Visible al mapa"
+                    />
+                    <input
+                      type="checkbox"
+                      className="cat-col-leg"
+                      checked={cat.legendVisible !== false}
+                      onChange={(e) => updateCat(i, { legendVisible: e.target.checked })}
+                      title="Visible a la llegenda"
+                    />
+                    <span className="cat-col-order">
+                      <button type="button" onClick={() => moveCategory(i, -1)} disabled={i === 0} aria-label="Pujar">↑</button>
+                      <button type="button" onClick={() => moveCategory(i, 1)} disabled={i === categories.length - 1} aria-label="Baixar">↓</button>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </>
       ) : null}
 
       {/* Per-feature sample verification */}
@@ -547,6 +609,68 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
             />
             Visible en exportació
           </label>
+
+          <div className="cat-legend-threshold">
+            <label className="cat-legend-row cat-legend-threshold-row">
+              Ocultar si menys de
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={legend.hideMinCount ?? 0}
+                onChange={(e) =>
+                  onLayerLegendChange?.(layer.id, { hideMinCount: Math.max(0, Number(e.target.value) || 0) })
+                }
+              />
+              elements
+            </label>
+            <label className="cat-legend-row cat-legend-row--check">
+              <input
+                type="checkbox"
+                checked={legend.groupSmallCategories === true}
+                disabled={!(legend.hideMinCount > 0)}
+                onChange={(e) =>
+                  onLayerLegendChange?.(layer.id, { groupSmallCategories: e.target.checked })
+                }
+              />
+              Agrupar-les com a «Altres»
+            </label>
+          </div>
+
+          {/* Elements destacats (feature overrides) */}
+          {Object.keys(layer.featureOverrides ?? {}).length > 0 && (
+            <div className="cat-overrides-section">
+              <p className="catdiag-dist-title">Elements destacats</p>
+              {Object.entries(layer.featureOverrides).map(([fk, ov]) => {
+                if (!ov) return null
+                const shortKey = fk.length > 14 ? `…${fk.slice(-12)}` : fk
+                return (
+                  <div key={fk} className="cat-override-row">
+                    <span
+                      className="cat-override-swatch"
+                      style={{ background: ov.fillColor || '#888' }}
+                      title={fk}
+                    />
+                    <span className="cat-override-key" title={fk}>{shortKey}</span>
+                    <input
+                      type="checkbox"
+                      className="cat-col-leg"
+                      checked={ov.showInLegend === true}
+                      onChange={(e) => updateOverride(fk, { showInLegend: e.target.checked })}
+                      title="Visible a la llegenda"
+                    />
+                    <input
+                      type="text"
+                      className="cat-override-label"
+                      value={ov.legendLabel || ''}
+                      placeholder="Etiqueta…"
+                      onChange={(e) => updateOverride(fk, { legendLabel: e.target.value })}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       ) : null}
     </>
@@ -605,6 +729,7 @@ function LayerInspector({
   onLayerStyleModeChange,
   onLayerCategoricalChange,
   onLayerLegendChange,
+  onFeatureOverrideChange,
   projectPalettes = [],
   onManagePalettes,
   onMoveLayerUp,
@@ -719,6 +844,7 @@ function LayerInspector({
                 layer={layer}
                 onLayerCategoricalChange={onLayerCategoricalChange}
                 onLayerLegendChange={onLayerLegendChange}
+                onFeatureOverrideChange={onFeatureOverrideChange}
                 projectPalettes={projectPalettes}
                 onManagePalettes={onManagePalettes}
               />

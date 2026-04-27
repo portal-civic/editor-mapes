@@ -18,7 +18,6 @@ function Swatch({ geometryType, style = {} }) {
       />
     )
   }
-  // point (default)
   return (
     <span
       className="map-legend-swatch map-legend-swatch--point"
@@ -33,16 +32,19 @@ function Swatch({ geometryType, style = {} }) {
 export default function MapLegendOverlay({ entries = [], layout = {} }) {
   if (entries.length === 0) return null
 
-  const { fontFamily, fontSize, background, border } = layout
+  const { fontFamily, fontSize, titleFontSize, background, border } = layout
 
   const overlayStyle = {
     fontFamily: fontFamily || undefined,
     fontSize: fontSize ? `${fontSize}px` : undefined,
-    // Semi-transparent tinted background when custom colour provided
     background: background && background !== '#ffffff'
       ? `${background}ee`
       : undefined,
     border: border === false ? 'none' : undefined,
+  }
+
+  const titleStyle = {
+    fontSize: titleFontSize ? `${titleFontSize}px` : undefined,
   }
 
   return (
@@ -50,7 +52,7 @@ export default function MapLegendOverlay({ entries = [], layout = {} }) {
       {entries.map((entry, ei) => (
         <div key={ei} className="map-legend-group">
           {entry.rows.length > 1 && (
-            <div className="map-legend-group-title">{entry.title}</div>
+            <div className="map-legend-group-title" style={titleStyle}>{entry.title}</div>
           )}
           {entry.rows.map((row, ri) => (
             <div key={ri} className="map-legend-row">
