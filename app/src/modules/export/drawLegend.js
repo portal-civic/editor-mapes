@@ -78,6 +78,7 @@ function wrapText(ctx, text, maxWidth) {
 function countTotalRows(entries) {
   let n = 0
   for (const entry of entries) {
+    if (entry.isGroupHeader) { n++; continue }
     if (entry.rows.length > 1) n++ // group title counts as a row
     n += entry.rows.length
   }
@@ -110,6 +111,11 @@ export function drawLegend(ctx, canvasWidth, canvasHeight, legendEntries, layout
 
   legendEntries.forEach((entry, ei) => {
     if (ei > 0) items.push({ type: 'gap' })
+    if (entry.isGroupHeader) {
+      items.push({ type: 'title', text: entry.title })
+      maxTextWidth = Math.max(maxTextWidth, ctx.measureText(entry.title).width)
+      return
+    }
     if (entry.rows.length > 1) {
       items.push({ type: 'title', text: entry.title })
       maxTextWidth = Math.max(maxTextWidth, ctx.measureText(entry.title).width)
@@ -254,6 +260,17 @@ export function drawLegendColumn(ctx, colX, colY, colW, colH, legendEntries, lay
   for (let ei = 0; ei < legendEntries.length; ei++) {
     const entry = legendEntries[ei]
     if (ei > 0) curY += 12
+
+    if (entry.isGroupHeader) {
+      ctx.globalAlpha = 1
+      ctx.fillStyle = '#555555'
+      ctx.font = `700 ${titleFontSize}px ${fontFamily}`
+      ctx.textBaseline = 'middle'
+      ctx.setLineDash([])
+      ctx.fillText(entry.title || '', colX + pad, curY + titleH / 2)
+      curY += titleH + 3
+      continue
+    }
 
     if (entry.rows.length > 1) {
       ctx.globalAlpha = 1

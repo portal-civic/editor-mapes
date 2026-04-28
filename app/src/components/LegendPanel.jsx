@@ -62,26 +62,35 @@ export default function LegendPanel({ entries = [], layout = {}, isHorizontal = 
       {entries.length === 0 ? (
         <span className="legend-panel-empty">Cap llegenda</span>
       ) : (
-        entries.map((entry, ei) => (
-          <div key={ei} className="legend-col-group">
-            {entry.rows.length > 1 && (
-              <div
-                className="legend-col-group-title"
-                style={titleFontSize ? { fontSize: `${titleFontSize}px` } : undefined}
-              >
+        entries.map((entry, ei) => {
+          if (entry.isGroupHeader) {
+            return (
+              <div key={`gh-${ei}`} className="legend-col-group-header" style={titleFontSize ? { fontSize: `${titleFontSize}px` } : undefined}>
                 {entry.title}
               </div>
-            )}
-            {entry.rows.map((row, ri) => (
-              <div key={ri} className="legend-col-row">
-                <Swatch geometryType={row.geometryType} style={row.style} />
-                <span className="legend-col-label" style={fontStyle}>
-                  {row.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        ))
+            )
+          }
+          return (
+            <div key={ei} className="legend-col-group">
+              {entry.rows.length > 1 && (
+                <div
+                  className="legend-col-group-title"
+                  style={titleFontSize ? { fontSize: `${titleFontSize}px` } : undefined}
+                >
+                  {entry.title}
+                </div>
+              )}
+              {entry.rows.map((row, ri) => (
+                <div key={ri} className="legend-col-row">
+                  <Swatch geometryType={row.geometryType} style={row.style} />
+                  <span className="legend-col-label" style={fontStyle}>
+                    {row.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })
       )}
     </div>
   )

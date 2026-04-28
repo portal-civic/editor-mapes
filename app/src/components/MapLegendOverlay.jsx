@@ -49,19 +49,28 @@ export default function MapLegendOverlay({ entries = [], layout = {} }) {
 
   return (
     <div className="map-legend-overlay" aria-label="Llegenda" style={overlayStyle}>
-      {entries.map((entry, ei) => (
-        <div key={ei} className="map-legend-group">
-          {entry.rows.length > 1 && (
-            <div className="map-legend-group-title" style={titleStyle}>{entry.title}</div>
-          )}
-          {entry.rows.map((row, ri) => (
-            <div key={ri} className="map-legend-row">
-              <Swatch geometryType={row.geometryType} style={row.style} />
-              <span className="map-legend-label">{row.label}</span>
+      {entries.map((entry, ei) => {
+        if (entry.isGroupHeader) {
+          return (
+            <div key={`gh-${ei}`} className="map-legend-group-header" style={titleStyle}>
+              {entry.title}
             </div>
-          ))}
-        </div>
-      ))}
+          )
+        }
+        return (
+          <div key={ei} className="map-legend-group">
+            {entry.rows.length > 1 && (
+              <div className="map-legend-group-title" style={titleStyle}>{entry.title}</div>
+            )}
+            {entry.rows.map((row, ri) => (
+              <div key={ri} className="map-legend-row">
+                <Swatch geometryType={row.geometryType} style={row.style} />
+                <span className="map-legend-label">{row.label}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

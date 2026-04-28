@@ -1,71 +1,235 @@
 import { useEffect, useRef, useState } from 'react'
 
-function GeomSymbol({ type, color, size = 16 }) {
-  if (type === 'point') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="8" cy="8" r="5" fill={color} />
-      </svg>
-    )
-  }
-  if (type === 'line') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-        <line x1="2" y1="13" x2="14" y2="3" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (type === 'polygon') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-        <polygon
-          points="8,2 14,13 2,13"
-          fill={color}
-          fillOpacity="0.45"
-          stroke={color}
-          strokeWidth="1.5"
-        />
-      </svg>
-    )
-  }
-  return null
-}
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function EyeIcon({ visible }) {
   if (visible) {
     return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      >
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M1.5 8C3 4.5 13 4.5 14.5 8C13 11.5 3 11.5 1.5 8Z" />
         <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
       </svg>
     )
   }
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    >
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <path d="M1.5 8C3 4.5 13 4.5 14.5 8C13 11.5 3 11.5 1.5 8Z" opacity="0.4" />
       <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" opacity="0.4" />
       <line x1="3" y1="13" x2="13" y2="3" />
     </svg>
   )
 }
+
+// Returns SVG dasharray string for a given dashStyle
+function dashArray(dashStyle) {
+  if (dashStyle === 'dashed') return '5,4'
+  if (dashStyle === 'dotted') return '1.5,4'
+  return null
+}
+
+// Rich layer symbol using actual style properties
+function LayerSymbol({ layer, size = 16 }) {
+  const geom = layer.geometryType
+  const st = layer.style || {}
+
+  if (geom === 'point') {
+    const fill = st.fillColor || layer.color || '#888'
+    const stroke = st.strokeColor || fill
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="5" fill={fill} fillOpacity={st.fillOpacity ?? 0.9} stroke={stroke} strokeWidth="1.5" />
+      </svg>
+    )
+  }
+
+  if (geom === 'line') {
+    const color = st.color || layer.color || '#888'
+    const da = dashArray(st.dashStyle)
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+        <line x1="2" y1="13" x2="14" y2="3" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray={da || undefined} />
+      </svg>
+    )
+  }
+
+  if (geom === 'polygon') {
+    const fill = st.fillColor || layer.color || '#888'
+    const stroke = st.strokeColor || fill
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+        <polygon
+          points="8,2 14,13 2,13"
+          fill={fill}
+          fillOpacity={st.fillOpacity ?? 0.18}
+          stroke={stroke}
+          strokeWidth={Math.min(st.strokeWidth ?? 2, 3)}
+        />
+      </svg>
+    )
+  }
+
+  // Categorical/source: use first category color if available
+  if (layer.styleMode === 'categorical' && layer.categorical?.categories?.length > 0) {
+    const firstCat = layer.categorical.categories[0]
+    const color = firstCat.fillColor || firstCat.color || layer.color || '#888'
+    const cs = layer.categorical.categoricalStyle || {}
+    if (layer.geometryType === 'line') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+          <line x1="2" y1="13" x2="14" y2="3" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
+      )
+    }
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+        <polygon points="8,2 14,13 2,13" fill={color} fillOpacity={cs.fillOpacity ?? 0.5} stroke={color} strokeWidth="1.5" />
+      </svg>
+    )
+  }
+
+  return null
+}
+
+// ─── Group layer management modal ─────────────────────────────────────────────
+
+function GroupLayerModal({ group, layers, onClose, onSetLayerGroup }) {
+  const handleToggle = (layerId, checked) => {
+    onSetLayerGroup?.(layerId, checked ? group.id : undefined)
+  }
+
+  const vectorLayers = layers.filter(
+    (l) => l.geometryType === 'point' || l.geometryType === 'line' || l.geometryType === 'polygon',
+  )
+
+  return (
+    <div className="group-modal-backdrop" onMouseDown={onClose}>
+      <div className="group-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="group-modal-header">
+          <span>Capes del grup "{group.name}"</span>
+          <button type="button" className="group-modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="group-modal-body">
+          {vectorLayers.length === 0 ? (
+            <p className="group-modal-empty">No hi ha capes vectorials</p>
+          ) : (
+            vectorLayers.map((layer) => {
+              const inThisGroup = layer.groupId === group.id
+              const inOtherGroup = layer.groupId && layer.groupId !== group.id
+              return (
+                <label key={layer.id} className={`group-modal-row${inOtherGroup ? ' group-modal-row--other' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={inThisGroup}
+                    disabled={!!inOtherGroup}
+                    onChange={(e) => handleToggle(layer.id, e.target.checked)}
+                  />
+                  <LayerSymbol layer={layer} size={14} />
+                  <span className="group-modal-layer-name">{layer.name}</span>
+                  {inOtherGroup ? (
+                    <span className="group-modal-other-hint">
+                      (a un altre grup)
+                    </span>
+                  ) : null}
+                </label>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Group settings panel (legend + style override) ───────────────────────────
+
+function GroupSettingsPanel({ group, onUpdateLegend, onUpdateStyleOverride, onClose }) {
+  const leg = group.legend ?? {}
+  const so = group.styleOverride ?? {}
+
+  const updLeg = (key, val) => onUpdateLegend?.({ ...leg, [key]: val })
+  const updSo = (key, val) => onUpdateStyleOverride?.({ ...so, [key]: val })
+
+  return (
+    <div className="group-settings-panel">
+      <div className="group-settings-header">
+        <span>Grup: {group.name}</span>
+        <button type="button" className="group-modal-close" onClick={onClose}>×</button>
+      </div>
+
+      <div className="group-settings-section-label">Llegenda</div>
+
+      <label className="group-settings-check">
+        <input type="checkbox" checked={!!leg.showGroupTitle} onChange={(e) => updLeg('showGroupTitle', e.target.checked)} />
+        Mostrar capçalera de grup
+      </label>
+
+      {leg.showGroupTitle ? (
+        <div className="group-settings-row">
+          <label className="group-settings-label">Títol</label>
+          <input
+            type="text"
+            className="group-settings-input"
+            value={leg.title ?? ''}
+            onChange={(e) => updLeg('title', e.target.value)}
+            placeholder={group.name}
+            maxLength={80}
+          />
+        </div>
+      ) : null}
+
+      <label className="group-settings-check">
+        <input type="checkbox" checked={leg.showChildLayers !== false} onChange={(e) => updLeg('showChildLayers', e.target.checked)} />
+        Mostrar capes individuals
+      </label>
+
+      <div className="group-settings-divider" />
+      <div className="group-settings-section-label">Estil comú</div>
+
+      <label className="group-settings-check">
+        <input type="checkbox" checked={!!so.enabled} onChange={(e) => updSo('enabled', e.target.checked)} />
+        Aplicar estil comú al grup
+      </label>
+
+      {so.enabled ? (
+        <div className="group-settings-style">
+          <div className="group-settings-row">
+            <label className="group-settings-label">Color farcit</label>
+            <input type="color" value={so.fillColor ?? '#888888'} onChange={(e) => updSo('fillColor', e.target.value)} />
+          </div>
+          <div className="group-settings-row">
+            <label className="group-settings-label">Opacitat farcit</label>
+            <input type="range" min="0" max="1" step="0.05" value={so.fillOpacity ?? 0.5} onChange={(e) => updSo('fillOpacity', parseFloat(e.target.value))} />
+            <span className="group-settings-hint">{Math.round((so.fillOpacity ?? 0.5) * 100)}%</span>
+          </div>
+          <div className="group-settings-row">
+            <label className="group-settings-label">Color contorn</label>
+            <input type="color" value={so.strokeColor ?? '#333333'} onChange={(e) => updSo('strokeColor', e.target.value)} />
+          </div>
+          <div className="group-settings-row">
+            <label className="group-settings-label">Opacitat contorn</label>
+            <input type="range" min="0" max="1" step="0.05" value={so.strokeOpacity ?? 1} onChange={(e) => updSo('strokeOpacity', parseFloat(e.target.value))} />
+            <span className="group-settings-hint">{Math.round((so.strokeOpacity ?? 1) * 100)}%</span>
+          </div>
+          <div className="group-settings-row">
+            <label className="group-settings-label">Amplada línia</label>
+            <input type="number" min="0.5" max="20" step="0.5" className="group-settings-number" value={so.strokeWidth ?? 2} onChange={(e) => updSo('strokeWidth', parseFloat(e.target.value) || 2)} />
+          </div>
+          <div className="group-settings-row">
+            <label className="group-settings-label">Estil línia</label>
+            <select className="group-settings-select" value={so.dashStyle ?? 'solid'} onChange={(e) => updSo('dashStyle', e.target.value)}>
+              <option value="solid">Continu</option>
+              <option value="dashed">Discontinu</option>
+              <option value="dotted">Puntejat</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// ─── LayersPanel ──────────────────────────────────────────────────────────────
 
 function LayersPanel({
   layers = [],
@@ -81,14 +245,19 @@ function LayersPanel({
   onRenameGroup,
   onDeleteGroup,
   onGroupVisibilityChange,
+  onToggleGroupCollapse,
+  onSetLayerGroup,
+  onUpdateGroupLegend,
+  onUpdateGroupStyleOverride,
   onOpenLibrary,
 }) {
   const [editingNameLayerId, setEditingNameLayerId] = useState(null)
   const [editingNameValue, setEditingNameValue] = useState('')
   const [showNewLayerMenu, setShowNewLayerMenu] = useState(false)
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set())
   const [editingGroupId, setEditingGroupId] = useState(null)
   const [editingGroupValue, setEditingGroupValue] = useState('')
+  const [managingGroupId, setManagingGroupId] = useState(null) // group layer modal
+  const [settingsGroupId, setSettingsGroupId] = useState(null) // group settings panel
 
   const groupNameInputRef = useRef(null)
   const renameInputRef = useRef(null)
@@ -157,17 +326,7 @@ function LayersPanel({
     setEditingGroupValue('')
   }
 
-  const toggleGroupCollapse = (groupId) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(groupId)) next.delete(groupId)
-      else next.add(groupId)
-      return next
-    })
-  }
-
   // Build render items: groups (with their layers) then ungrouped layers.
-  // Preserves relative order within each group and among ungrouped layers.
   const groupedLayerIds = new Set(
     vectorLayers.filter((l) => l.groupId).map((l) => l.groupId),
   )
@@ -175,7 +334,7 @@ function LayersPanel({
 
   groups.forEach((group) => {
     const groupLayers = vectorLayers.filter((l) => l.groupId === group.id)
-    const isCollapsed = collapsedGroups.has(group.id)
+    const isCollapsed = !!group.collapsed
     const allVisible = groupLayers.length > 0 && groupLayers.every((l) => l.visible)
     renderItems.push({ type: 'group', group, groupLayers, isCollapsed, allVisible })
     if (!isCollapsed) {
@@ -187,16 +346,12 @@ function LayersPanel({
     .filter((l) => !l.groupId || !groupedLayerIds.has(l.groupId))
     .forEach((layer) => renderItems.push({ type: 'layer', layer, inGroup: false }))
 
+  const managingGroup = managingGroupId ? groups.find((g) => g.id === managingGroupId) : null
+  const settingsGroup = settingsGroupId ? groups.find((g) => g.id === settingsGroupId) : null
+
   const renderLayer = (layer, inGroup) => {
     const isEditable = layer.id === editableLayerId
     const isEditingName = editingNameLayerId === layer.id
-    const layerStyle = layer.style || {}
-    const symbolColor =
-      layer.geometryType === 'point'
-        ? layerStyle.fillColor || layer.color
-        : layer.geometryType === 'line'
-          ? layerStyle.color || layer.color
-          : layerStyle.fillColor || layer.color
 
     return (
       <article
@@ -211,7 +366,7 @@ function LayersPanel({
           onKeyDown={(e) => { if (e.key === 'Enter') onSetEditableLayer?.(layer.id) }}
         >
           <span className="layer-card-symbol" aria-hidden="true">
-            <GeomSymbol type={layer.geometryType} color={symbolColor} size={16} />
+            <LayerSymbol layer={layer} size={16} />
           </span>
 
           {isEditingName ? (
@@ -276,15 +431,15 @@ function LayersPanel({
           {showNewLayerMenu ? (
             <div className="new-layer-dropdown">
               <button type="button" onClick={() => { onCreatePointLayer?.(); setShowNewLayerMenu(false) }}>
-                <GeomSymbol type="point" color="#d4335b" size={14} />
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="#d4335b" fillOpacity="0.9" stroke="#d4335b" strokeWidth="1.5" /></svg>
                 Capa de punts
               </button>
               <button type="button" onClick={() => { onCreateLineLayer?.(); setShowNewLayerMenu(false) }}>
-                <GeomSymbol type="line" color="#ea8b1f" size={14} />
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><line x1="2" y1="13" x2="14" y2="3" stroke="#ea8b1f" strokeWidth="2.5" strokeLinecap="round" /></svg>
                 Capa de línies
               </button>
               <button type="button" onClick={() => { onCreatePolygonLayer?.(); setShowNewLayerMenu(false) }}>
-                <GeomSymbol type="polygon" color="#2f7de1" size={14} />
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><polygon points="8,2 14,13 2,13" fill="#2f7de1" fillOpacity="0.2" stroke="#2f7de1" strokeWidth="1.5" /></svg>
                 Capa de polígons
               </button>
               <div className="new-layer-dropdown-divider" />
@@ -314,13 +469,14 @@ function LayersPanel({
             const { group, groupLayers, isCollapsed, allVisible } = item
             const isEditingGroupName = editingGroupId === group.id
             const isEmpty = groupLayers.length === 0
+            const hasStyleOverride = group.styleOverride?.enabled
             return (
-              <div key={group.id} className="layer-group">
+              <div key={group.id} className={`layer-group${hasStyleOverride ? ' layer-group--override' : ''}`}>
                 <div className="layer-group-header">
                   <button
                     type="button"
                     className="layer-group-collapse-btn"
-                    onClick={() => toggleGroupCollapse(group.id)}
+                    onClick={() => onToggleGroupCollapse?.(group.id)}
                     aria-label={isCollapsed ? 'Expandir grup' : 'Plegar grup'}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="currentColor">
@@ -350,10 +506,41 @@ function LayersPanel({
                       title="Doble clic per renombrar"
                     >
                       {group.name}
+                      {isCollapsed && groupLayers.length > 0 ? (
+                        <span className="layer-group-count">{groupLayers.length}</span>
+                      ) : null}
                     </span>
                   )}
 
                   <span className="layer-group-controls">
+                    {/* Manage layers button */}
+                    <button
+                      type="button"
+                      className="layer-group-action-btn"
+                      onClick={() => setManagingGroupId(group.id)}
+                      title="Gestionar capes del grup"
+                      aria-label="Gestionar capes del grup"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <line x1="2" y1="4" x2="12" y2="4" />
+                        <line x1="2" y1="7" x2="12" y2="7" />
+                        <line x1="2" y1="10" x2="9" y2="10" />
+                      </svg>
+                    </button>
+                    {/* Group settings button */}
+                    <button
+                      type="button"
+                      className={`layer-group-action-btn${settingsGroupId === group.id ? ' layer-group-action-btn--active' : ''}`}
+                      onClick={() => setSettingsGroupId((id) => id === group.id ? null : group.id)}
+                      title="Configuració del grup"
+                      aria-label="Configuració del grup"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                        <circle cx="7" cy="7" r="2" />
+                        <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.93 2.93l1.06 1.06M10.01 10.01l1.06 1.06M2.93 11.07l1.06-1.06M10.01 3.99l1.06-1.06" />
+                      </svg>
+                    </button>
+                    {/* Visibility */}
                     <button
                       type="button"
                       className={`layer-eye-btn ${allVisible ? '' : 'layer-eye-btn--off'}`}
@@ -377,6 +564,17 @@ function LayersPanel({
                     ) : null}
                   </span>
                 </div>
+
+                {/* Group settings panel (inline below header) */}
+                {settingsGroupId === group.id ? (
+                  <GroupSettingsPanel
+                    group={group}
+                    onUpdateLegend={(leg) => onUpdateGroupLegend?.(group.id, leg)}
+                    onUpdateStyleOverride={(so) => onUpdateGroupStyleOverride?.(group.id, so)}
+                    onClose={() => setSettingsGroupId(null)}
+                  />
+                ) : null}
+
                 {!isCollapsed && groupLayers.length === 0 ? (
                   <p className="layer-group-empty">Cap capa en aquest grup</p>
                 ) : null}
@@ -386,6 +584,16 @@ function LayersPanel({
           return renderLayer(item.layer, item.inGroup)
         })}
       </div>
+
+      {/* Group layer management modal */}
+      {managingGroup ? (
+        <GroupLayerModal
+          group={managingGroup}
+          layers={layers}
+          onClose={() => setManagingGroupId(null)}
+          onSetLayerGroup={onSetLayerGroup}
+        />
+      ) : null}
     </aside>
   )
 }

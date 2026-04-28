@@ -40,11 +40,40 @@ export function normalizeImportedLayers(layers) {
   return ensureInitialPointLayer(normalized)
 }
 
+function normalizeGroupLegend(raw) {
+  if (!raw || typeof raw !== 'object') return { title: '', showGroupTitle: false, showChildLayers: true }
+  return {
+    title: typeof raw.title === 'string' ? raw.title : '',
+    showGroupTitle: typeof raw.showGroupTitle === 'boolean' ? raw.showGroupTitle : false,
+    showChildLayers: typeof raw.showChildLayers === 'boolean' ? raw.showChildLayers : true,
+  }
+}
+
+function normalizeGroupStyleOverride(raw) {
+  const d = { enabled: false, fillColor: '#888888', fillOpacity: 0.5, strokeColor: '#333333', strokeOpacity: 1, strokeWidth: 2, dashStyle: 'solid' }
+  if (!raw || typeof raw !== 'object') return d
+  return {
+    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : false,
+    fillColor: typeof raw.fillColor === 'string' ? raw.fillColor : d.fillColor,
+    fillOpacity: typeof raw.fillOpacity === 'number' ? raw.fillOpacity : d.fillOpacity,
+    strokeColor: typeof raw.strokeColor === 'string' ? raw.strokeColor : d.strokeColor,
+    strokeOpacity: typeof raw.strokeOpacity === 'number' ? raw.strokeOpacity : d.strokeOpacity,
+    strokeWidth: typeof raw.strokeWidth === 'number' ? raw.strokeWidth : d.strokeWidth,
+    dashStyle: ['solid', 'dashed', 'dotted'].includes(raw.dashStyle) ? raw.dashStyle : d.dashStyle,
+  }
+}
+
 export function normalizeImportedGroups(groups) {
   if (!Array.isArray(groups)) return []
   return groups
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')
-    .map((g) => ({ id: g.id, name: g.name }))
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      collapsed: typeof g.collapsed === 'boolean' ? g.collapsed : false,
+      legend: normalizeGroupLegend(g.legend),
+      styleOverride: normalizeGroupStyleOverride(g.styleOverride),
+    }))
 }
 
 export function normalizeImportedLegendLayout(raw) {

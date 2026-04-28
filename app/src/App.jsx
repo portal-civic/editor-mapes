@@ -113,7 +113,7 @@ function App() {
   const [focusMask, setFocusMask] = useState(null)
   // pendingGeoJSONImport = { parsedData, fileName, featureCount } | null
   const [pendingGeoJSONImport, setPendingGeoJSONImport] = useState(null)
-  // groups = [{ id, name }]
+  // groups = [{ id, name, collapsed, legend, styleOverride }]
   const [groups, setGroups] = useState([])
   // bearing: map rotation in degrees (0 = north up)
   const [bearing, setBearing] = useState(0)
@@ -148,29 +148,37 @@ function App() {
     [selectedBasemapId],
   )
 
+  const groupStyleOverrideMap = useMemo(() => {
+    const map = new Map()
+    for (const g of groups) {
+      if (g.styleOverride?.enabled) map.set(g.id, g.styleOverride)
+    }
+    return map
+  }, [groups])
+
   const visiblePointFeatures = useMemo(
     () =>
       layers
         .filter((layer) => layer.geometryType === 'point' && layer.visible)
         .flatMap((layer) => {
           const features = Array.isArray(layer.features) ? layer.features : []
+          const gso = layer.groupId ? groupStyleOverrideMap.get(layer.groupId) : undefined
           return features.map((feature) => {
-            // Feature icon override: "fa:iconid" stored in feature.icon overrides
-            // the layer icon while inheriting all other style properties.
             const featureIconMatch =
               typeof feature.icon === 'string' ? feature.icon.match(/^fa:(.+)$/) : null
-            const effectiveStyle = featureIconMatch
+            let base = featureIconMatch
               ? { ...layer.style, markerType: 'icon-circle', icon: featureIconMatch[1], iconSet: 'fa' }
               : layer.style
+            if (gso) base = { ...base, fillColor: gso.fillColor, fillOpacity: gso.fillOpacity, strokeColor: gso.strokeColor, strokeOpacity: gso.strokeOpacity, strokeWidth: gso.strokeWidth }
             return {
               ...feature,
               label: typeof feature.label === 'string' ? feature.label : '',
-              style: effectiveStyle,
+              style: base,
               layerId: layer.id,
             }
           })
         }),
-    [layers],
+    [layers, groupStyleOverrideMap],
   )
 
   const visibleLineFeatures = useMemo(
@@ -179,16 +187,20 @@ function App() {
         .filter((layer) => layer.geometryType === 'line' && layer.visible)
         .flatMap((layer) => {
           const features = Array.isArray(layer.features) ? layer.features : []
+          const gso = layer.groupId ? groupStyleOverrideMap.get(layer.groupId) : undefined
+          const baseStyle = gso
+            ? { ...layer.style, color: gso.strokeColor, width: gso.strokeWidth, opacity: gso.strokeOpacity, dashStyle: gso.dashStyle }
+            : layer.style
           return features
             .filter((feature) => Array.isArray(feature.latlngs))
             .map((feature) => ({
               ...feature,
               label: typeof feature.label === 'string' ? feature.label : '',
-              style: layer.style,
+              style: baseStyle,
               layerId: layer.id,
             }))
         }),
-    [layers],
+    [layers, groupStyleOverrideMap],
   )
 
   const visiblePolygonFeatures = useMemo(
@@ -197,16 +209,20 @@ function App() {
         .filter((layer) => layer.geometryType === 'polygon' && layer.visible)
         .flatMap((layer) => {
           const features = Array.isArray(layer.features) ? layer.features : []
+          const gso = layer.groupId ? groupStyleOverrideMap.get(layer.groupId) : undefined
+          const baseStyle = gso
+            ? { ...layer.style, fillColor: gso.fillColor, fillOpacity: gso.fillOpacity, strokeColor: gso.strokeColor, strokeOpacity: gso.strokeOpacity, strokeWidth: gso.strokeWidth, dashStyle: gso.dashStyle }
+            : layer.style
           return features
             .filter((feature) => Array.isArray(feature.latlngs))
             .map((feature) => ({
               ...feature,
               label: typeof feature.label === 'string' ? feature.label : '',
-              style: layer.style,
+              style: baseStyle,
               layerId: layer.id,
             }))
         }),
-    [layers],
+    [layers, groupStyleOverrideMap],
   )
   const visibleLayerOrder = useMemo(
     () =>
@@ -266,8 +282,9 @@ function App() {
       language: legendLayout.language,
       showLayerNames: legendLayout.showLayerNames !== false,
       visibleValuesByLayerId,
+      groups,
     }),
-    [layers, legendLayout.language, legendLayout.showLayerNames, visibleValuesByLayerId],
+    [layers, legendLayout.language, legendLayout.showLayerNames, visibleValuesByLayerId, groups],
   )
 
   const allPalettes = useMemo(() => {
@@ -329,7 +346,16 @@ function App() {
 
   const handleCreateGroup = () => {
     const nextId = `group-${Date.now()}-${Math.round(Math.random() * 10000)}`
-    setGroups((prev) => [...prev, { id: nextId, name: `Grup ${prev.length + 1}` }])
+    setGroups((prev) => [
+      ...prev,
+      {
+        id: nextId,
+        name: `Grup ${prev.length + 1}`,
+        collapsed: false,
+        legend: { title: '', showGroupTitle: false, showChildLayers: true },
+        styleOverride: { enabled: false, fillColor: '#888888', fillOpacity: 0.5, strokeColor: '#333333', strokeOpacity: 1, strokeWidth: 2, dashStyle: 'solid' },
+      },
+    ])
   }
 
   const handleRenameGroup = (groupId, newName) => {
@@ -356,6 +382,24 @@ function App() {
   const handleGroupVisibilityChange = (groupId, visible) => {
     setLayers((current) =>
       current.map((l) => (l.groupId === groupId ? { ...l, visible } : l)),
+    )
+  }
+
+  const handleToggleGroupCollapse = (groupId) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g)),
+    )
+  }
+
+  const handleUpdateGroupLegend = (groupId, legend) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, legend } : g)),
+    )
+  }
+
+  const handleUpdateGroupStyleOverride = (groupId, styleOverride) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, styleOverride } : g)),
     )
   }
 
@@ -1969,6 +2013,10 @@ function App() {
           onRenameGroup={handleRenameGroup}
           onDeleteGroup={handleDeleteGroup}
           onGroupVisibilityChange={handleGroupVisibilityChange}
+          onToggleGroupCollapse={handleToggleGroupCollapse}
+          onSetLayerGroup={handleSetLayerGroup}
+          onUpdateGroupLegend={handleUpdateGroupLegend}
+          onUpdateGroupStyleOverride={handleUpdateGroupStyleOverride}
           onOpenLibrary={() => setShowLibraryDialog(true)}
         />
         <section className="map-workspace">
@@ -2050,7 +2098,7 @@ function App() {
                 onSourceFeatureClick={handleSourceFeatureClick}
                 selectedSourceFeature={selectedSourceFeature}
                 focusMask={focusMask}
-                legendEntries={showExternalLegend ? [] : legendEntries}
+                legendEntries={showExternalLegend || lpos === 'none' ? [] : legendEntries}
                 legendLayout={legendLayout}
               />
             )

@@ -133,12 +133,54 @@ export function buildLegendEntry(layer, options = {}) {
 }
 
 // ─── All visible legend entries ───────────────────────────────────────────────
+// Entries are either:
+//   { title, rows, layerId }          — per-layer entry (existing shape)
+//   { isGroupHeader: true, title }    — group section separator
 
 export function buildLegendEntries(layers, options = {}) {
-  return layers
-    .filter((l) => l.visible)
-    .map((l) => buildLegendEntry(l, options))
-    .filter(Boolean)
-    .filter((e) => e.rows.length > 0)
+  const groups = options.groups ?? []
+  if (groups.length === 0) {
+    return layers
+      .filter((l) => l.visible)
+      .map((l) => buildLegendEntry(l, options))
+      .filter(Boolean)
+      .filter((e) => e.rows.length > 0)
+  }
+
+  const visibleLayers = layers.filter((l) => l.visible)
+  const processedIds = new Set()
+  const result = []
+
+  for (const group of groups) {
+    const groupLayers = visibleLayers.filter((l) => l.groupId === group.id)
+    if (groupLayers.length === 0) continue
+
+    const leg = group.legend ?? {}
+    const showGroupTitle = leg.showGroupTitle === true
+    const showChildLayers = leg.showChildLayers !== false
+    const groupTitle = (typeof leg.title === 'string' && leg.title.trim()) ? leg.title.trim() : group.name
+
+    if (showGroupTitle) {
+      result.push({ isGroupHeader: true, title: groupTitle })
+    }
+
+    if (showChildLayers) {
+      for (const layer of groupLayers) {
+        const entry = buildLegendEntry(layer, options)
+        if (entry && entry.rows.length > 0) result.push(entry)
+        processedIds.add(layer.id)
+      }
+    } else {
+      groupLayers.forEach((l) => processedIds.add(l.id))
+    }
+  }
+
+  for (const layer of visibleLayers) {
+    if (processedIds.has(layer.id)) continue
+    const entry = buildLegendEntry(layer, options)
+    if (entry && entry.rows.length > 0) result.push(entry)
+  }
+
+  return result
 }
 
