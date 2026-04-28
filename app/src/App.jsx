@@ -1028,12 +1028,9 @@ function App() {
       limitHit = typeof entry.maxFeatures === 'number' && returned >= entry.maxFeatures
     } else {
       // entry.path starts with '/' (e.g. '/library/layers/foo.geojson').
-      // Strip the leading slash so new URL() resolves it relative to BASE_URL
-      // ('/editor-mapes/' on GitHub Pages, '/' in local dev).
-      const resolvedPath = new URL(
-        entry.path.replace(/^\//, ''),
-        import.meta.env.BASE_URL,
-      ).href
+      // BASE_URL ends with '/' ('/' in dev, '/editor-mapes/' in production).
+      // Slice off the trailing slash so the two slashes don't double up.
+      const resolvedPath = import.meta.env.BASE_URL.slice(0, -1) + entry.path
       const response = await fetch(resolvedPath)
       if (!response.ok) {
         throw new Error(response.status === 404 ? 'no_file' : 'fetch_failed')

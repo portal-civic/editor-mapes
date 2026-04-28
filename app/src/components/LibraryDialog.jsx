@@ -179,7 +179,7 @@ function LibraryDialog({ onClose, onImport }) {
   const searchRef = useRef(null)
 
   useEffect(() => {
-    fetch(new URL('library/layers/catalog.json', import.meta.env.BASE_URL).href)
+    fetch(import.meta.env.BASE_URL + 'library/layers/catalog.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data) => setCatalog(Array.isArray(data) ? data : []))
       .catch(() => setCatalogError(true))
