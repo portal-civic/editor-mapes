@@ -7,6 +7,9 @@ import { suggestGvaPresets, GVA_GROUPS } from '../modules/presets/gva'
 import {
   findCompatibleDictionaries,
   applyDictionaryToCategories,
+  getCv05DictionaryForLayer,
+  translateCv05Value,
+  collectUnknownCv05Values,
 } from '../modules/dictionaries'
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
@@ -54,6 +57,21 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
 
   // Reset dictionary result when field changes
   useEffect(() => { setDictApplyResult(null) }, [field])
+
+  const cv05Dict = useMemo(
+    () => getCv05DictionaryForLayer({ dictionaryId: layer.meta?.dictionaryId, fields }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layer.meta?.dictionaryId, fields.join(',')],
+  )
+  const [cv05FieldMode, setCv05FieldMode] = useState(cv05Dict?.preferredField ?? 'grupo')
+  const [cv05ApplyResult, setCv05ApplyResult] = useState(null)
+
+  // Reset when the detected dictionary changes (different layer loaded)
+  useEffect(() => {
+    setCv05FieldMode(cv05Dict?.preferredField ?? 'grupo')
+    setCv05ApplyResult(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cv05Dict?.id])
 
   // Map: raw key → category (for value distribution display)
   const categoryKeyMap = useMemo(() => {
@@ -217,6 +235,104 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
       ) : field && distInfo && distInfo.values.length === 0 ? (
         <p className="catdiag-warn">⚠ Cap valor trobat per "{field}"</p>
       ) : null}
+
+      {/* CV05 dictionary suggestion — shown whenever the layer has a known CV05 dictionaryId */}
+      {cv05Dict ? (() => {
+        const applyField = cv05FieldMode
+        const canApply = categories.length > 0 && !!applyField
+        const isFichaMode = cv05FieldMode === 'ficha'
+        const hasGrupo = cv05Dict.targetFields.includes('grupo')
+        const hasFicha = cv05Dict.targetFields.includes('ficha')
+        return (
+          <div className="dict-block dict-block--cv05">
+            <div className="dict-block-header">Diccionari CV05 (ICV)</div>
+            <div className="dict-item">
+              <div className="dict-item-top">
+                <span className="dict-item-name">{cv05Dict.name}</span>
+                <button
+                  type="button"
+                  className="dict-apply-btn"
+                  disabled={!canApply}
+                  title={canApply ? `Aplicar diccionari per "${applyField}"` : 'Cal generar categories primer'}
+                  onClick={() => {
+                    const unknown = collectUnknownCv05Values({ categories, dictionary: cv05Dict, field: applyField })
+                    const translated = categories.filter((cat) => {
+                      if (cat.value == null) return false
+                      return translateCv05Value({ dictionary: cv05Dict, field: applyField, value: cat.value }) != null
+                    }).length
+                    setCv05ApplyResult({ translated, unknown })
+                    onLayerCategoricalChange?.(layer.id, {
+                      _applyCV05Dictionary: true,
+                      dictionary: cv05Dict,
+                      field: applyField,
+                    })
+                  }}
+                >
+                  Aplicar
+                </button>
+              </div>
+
+              {/* Field switcher: grupo (default) / ficha (advanced) */}
+              {hasGrupo && hasFicha ? (
+                <div className="cv05-field-switcher">
+                  <span className="cv05-switcher-label">Classificar per:</span>
+                  <button
+                    type="button"
+                    className={`cv05-switcher-btn${cv05FieldMode === 'grupo' ? ' active' : ''}`}
+                    onClick={() => { setCv05FieldMode('grupo'); setCv05ApplyResult(null) }}
+                  >
+                    grupo
+                  </button>
+                  <button
+                    type="button"
+                    className={`cv05-switcher-btn${cv05FieldMode === 'ficha' ? ' active' : ''}`}
+                    onClick={() => { setCv05FieldMode('ficha'); setCv05ApplyResult(null) }}
+                  >
+                    ficha
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Warning when ficha is selected */}
+              {isFichaMode ? (
+                <p className="cv05-ficha-warn">
+                  Els codis <em>ficha</em> són tècnics i no representen una classificació completa.
+                </p>
+              ) : null}
+
+              {/* Hint when no categories generated yet */}
+              {categories.length === 0 ? (
+                <p className="cv05-field-hint">
+                  Genera categories per <strong>{applyField}</strong> i aplica el diccionari per obtindre noms llegibles.
+                </p>
+              ) : null}
+
+              {/* Apply result */}
+              {cv05ApplyResult ? (
+                <>
+                  <p className="dict-apply-result">
+                    {cv05ApplyResult.translated} traduïdes
+                    {cv05ApplyResult.unknown.length > 0
+                      ? ` · ${cv05ApplyResult.unknown.length} sense traducció`
+                      : ' · totes reconegudes'}
+                  </p>
+                  {cv05ApplyResult.unknown.length > 0 ? (
+                    <p
+                      className="cv05-unknown-vals"
+                      title={cv05ApplyResult.unknown.join(', ')}
+                    >
+                      Valors pendents: {cv05ApplyResult.unknown.slice(0, 6).join(', ')}
+                      {cv05ApplyResult.unknown.length > 6
+                        ? ` +${cv05ApplyResult.unknown.length - 6}`
+                        : ''}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </div>
+        )
+      })() : null}
 
       {/* Dictionary suggestions */}
       {field && categories.length > 0 && compatibleDicts.length > 0 && (
@@ -1102,6 +1218,19 @@ function LayerInspector({
               ) : null}
             </div>
           )}
+        </div>
+
+        <div className="inspector-section">
+          <p className="inspector-section-title">Llegenda</p>
+          <label>
+            Nom en llegenda
+            <input
+              type="text"
+              value={layer.legend?.title ?? ''}
+              onChange={(e) => onLayerLegendChange?.(layer.id, { title: e.target.value })}
+              placeholder={layer.name}
+            />
+          </label>
         </div>
 
         {layer.geometryType === 'polygon' ? (

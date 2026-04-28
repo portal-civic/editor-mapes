@@ -113,7 +113,7 @@ export default function LegendConfigPanel({ layout, onChange }) {
         </div>
 
         <div className="legend-cfg-row">
-          <label className="legend-cfg-label">Títol</label>
+          <label className="legend-cfg-label">Posició títol</label>
           <select
             className="legend-cfg-select"
             value={layout.titlePosition ?? 'floating'}
@@ -124,6 +124,29 @@ export default function LegendConfigPanel({ layout, onChange }) {
             ))}
           </select>
         </div>
+
+        <label className="legend-cfg-check">
+          <input
+            type="checkbox"
+            checked={layout.exportTitleEnabled ?? false}
+            onChange={(e) => upd('exportTitleEnabled', e.target.checked)}
+          />
+          Mostrar títol
+        </label>
+
+        {layout.exportTitleEnabled ? (
+          <div className="legend-cfg-row">
+            <label className="legend-cfg-label">Títol</label>
+            <input
+              type="text"
+              className="legend-cfg-text-input"
+              value={layout.exportTitle ?? ''}
+              onChange={(e) => upd('exportTitle', e.target.value)}
+              placeholder="Títol del mapa…"
+              maxLength={120}
+            />
+          </div>
+        ) : null}
 
         <div className="legend-cfg-divider" />
 

@@ -41,7 +41,6 @@ function TopBar({
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [currentSelection, setCurrentSelection] = useState(null)
-  const [exportTitle, setExportTitle] = useState('')
   const [showLegend, setShowLegend] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showImportMenu, setShowImportMenu] = useState(false)
@@ -397,14 +396,6 @@ function TopBar({
                 Exportar PDF (prova)
               </button>
               <div className="export-dropdown-png">
-                <input
-                  type="text"
-                  className="topbar-export-title"
-                  placeholder={`Títol PNG (per defecte: ${projectName})`}
-                  value={exportTitle}
-                  onChange={(event) => setExportTitle(event.target.value)}
-                  maxLength={120}
-                />
                 <label className="topbar-export-legend-toggle">
                   <input
                     type="checkbox"
@@ -417,7 +408,7 @@ function TopBar({
                   type="button"
                   className="topbar-dropdown-item topbar-dropdown-item--cta"
                   onClick={() => {
-                    onExportPNG?.({ title: exportTitle || projectName, showLegend })
+                    onExportPNG?.({ showLegend })
                     setShowExportMenu(false)
                   }}
                 >

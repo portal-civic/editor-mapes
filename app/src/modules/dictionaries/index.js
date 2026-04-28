@@ -5,6 +5,12 @@ import { PLANNING_DICTIONARY } from './planning'
 export { SIOSE_DICTIONARY } from './siose'
 export { SIGPAC_DICTIONARY } from './sigpac'
 export { PLANNING_DICTIONARY } from './planning'
+export {
+  CV05_DICTIONARIES,
+  getCv05DictionaryForLayer,
+  translateCv05Value,
+  collectUnknownCv05Values,
+} from './cv05'
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 

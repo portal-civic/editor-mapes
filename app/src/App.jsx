@@ -52,7 +52,7 @@ import {
 import { IMPORT_MODES } from './modules/import/importOptions'
 import { readGeoJSONMeta } from './modules/sources/readGeoJSONMeta'
 import { createDatasetFromSource } from './modules/sources/createDataset'
-import { storeSourceFeatures, removeSource, removeDataset } from './modules/sources/sourceStore'
+import { storeSourceFeatures, removeSource, removeDataset, getSourceFeatures } from './modules/sources/sourceStore'
 import { readShapefileZip } from './modules/sources/readShapefileZip'
 import { openGpkgFile } from './modules/sources/readGpkg'
 import {
@@ -66,12 +66,15 @@ import { DEFAULT_LEGEND_LAYOUT, normalizeLegendLayout } from './modules/legend/l
 import {
   applyDictionaryToCategories,
   ALL_DICTIONARIES,
+  translateCv05Value,
 } from './modules/dictionaries'
 import { getDatasetFeatures } from './modules/sources/sourceStore'
 import { filterByViewportBbox } from './modules/sources/bboxFilter'
 import LegendPanel from './components/LegendPanel'
 import LegendConfigPanel from './components/LegendConfigPanel'
 import SelectedSourceFeaturePanel from './components/SelectedSourceFeaturePanel'
+import LibraryDialog from './components/LibraryDialog'
+import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
   return basemapOptions.some((basemap) => basemap.id === basemapId)
@@ -136,6 +139,7 @@ function App() {
   const [selectedSourceFeature, setSelectedSourceFeature] = useState(null)
   // projectName: editable inline in TopBar; used for export filename and default PNG title
   const [projectName, setProjectName] = useState('Nou projecte')
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false)
 
   const selectedBasemap = useMemo(
     () =>
@@ -544,6 +548,7 @@ function App() {
       groups,
       projectPalettes,
       legendLayout,
+      focusMask,
       datasets: datasetsPayload,
     })
     const jsonContent = JSON.stringify(projectData, null, 2)
@@ -691,13 +696,17 @@ function App() {
     URL.revokeObjectURL(downloadUrl)
   }
 
-  const handleExportPNG = async ({ title = '', showLegend = true } = {}) => {
+  const handleExportPNG = async ({ showLegend = true } = {}) => {
     if (!mapInstanceRef.current) {
       window.alert("No s'ha trobat el mapa per exportar")
       return
     }
 
     try {
+      const titleText = legendLayout.exportTitleEnabled
+        ? (legendLayout.exportTitle || projectName || '')
+        : ''
+
       // When the TopBar "Llegenda" toggle is off, force position=none for this export.
       const exportLayout = showLegend
         ? legendLayout
@@ -708,7 +717,7 @@ function App() {
         fileName: 'editor-mapes.png',
         legendEntries,
         legendLayout: exportLayout,
-        title,
+        title: titleText,
       })
     } catch {
       window.alert("No s'ha pogut exportar la imatge PNG")
@@ -758,6 +767,19 @@ function App() {
       setGroups(normalizeImportedGroups(importedProject.groups))
       setProjectPalettes(normalizeImportedPalettes(importedProject.palettes))
       setLegendLayout(normalizeImportedLegendLayout(importedProject.legendLayout))
+
+      const savedMask = importedProject.focusMask
+      setFocusMask(
+        savedMask &&
+        Array.isArray(savedMask.layerIds) &&
+        savedMask.layerIds.length > 0
+          ? {
+              layerIds: savedMask.layerIds.filter((id) => typeof id === 'string'),
+              opacity: typeof savedMask.opacity === 'number' ? savedMask.opacity : 0.7,
+              color: typeof savedMask.color === 'string' ? savedMask.color : '#ffffff',
+            }
+          : null,
+      )
 
       // Rebuild lightweight datasets metadata so layer deletion cleans up correctly.
       setDatasets(
@@ -924,6 +946,140 @@ function App() {
       removeSource(pendingSourceImport.sourceId)
     }
     setPendingSourceImport(null)
+  }
+
+  // Library: import a catalog entry (geojson or wfs) filtered to the current viewport.
+  // For WFS entries, entry.typeName must already be resolved by LibraryDialog.
+  // Returns { featureCount, warned } on success; throws with err.message code on failure.
+  const handleLibraryImport = async (entry) => {
+    // Resolve viewport from state, fall back to map instance
+    const viewport =
+      mapViewport ??
+      (() => {
+        if (!mapInstanceRef.current) return null
+        const b = mapInstanceRef.current.getBounds()
+        return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+      })()
+
+    // ── Step 1: fetch data ────────────────────────────────────────────────────
+    let parsedData
+    let serverFiltered = false
+    let limitHit = false
+
+    if (entry.type === 'wfs') {
+      const wfsResult = await fetchWfsGeoJson({
+        url: entry.serviceUrl,
+        typeName: entry.typeName,
+        bbox: viewport,
+        srsName: entry.srsName ?? 'EPSG:4326',
+        maxFeatures: entry.maxFeatures ?? 5000,
+        version: entry.wfsVersion ?? '2.0.0',
+        outputFormat: entry.outputFormat ?? 'application/json',
+        language: entry.language ?? null,
+      })
+      parsedData = wfsResult.data
+      serverFiltered = true
+      // WFS server applies COUNT; warn if result == limit (likely truncated)
+      const returned = Array.isArray(parsedData?.features) ? parsedData.features.length : 0
+      limitHit = typeof entry.maxFeatures === 'number' && returned >= entry.maxFeatures
+    } else {
+      const response = await fetch(entry.path)
+      if (!response.ok) {
+        throw new Error(response.status === 404 ? 'no_file' : 'fetch_failed')
+      }
+      parsedData = await response.json()
+    }
+
+    // ── Step 2: read metadata ─────────────────────────────────────────────────
+    const meta = readGeoJSONMeta(parsedData)
+    if (!meta) throw new Error('invalid')
+
+    // ── Step 3: store source features ─────────────────────────────────────────
+    const sourceId = `src-lib-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    storeSourceFeatures(sourceId, meta.rawFeatures)
+
+    // ── Step 4: create dataset (client-side viewport filter for geojson only) ──
+    const importOptions = {}
+    if (!serverFiltered) {
+      if (viewport) importOptions.viewport = viewport
+      // Check if viewport-filtered count exceeds maxFeatures (geojson only)
+      if (typeof entry.maxFeatures === 'number') {
+        const vpFeatures = viewport
+          ? filterByViewportBbox(getSourceFeatures(sourceId), viewport)
+          : getSourceFeatures(sourceId)
+        limitHit = vpFeatures.length > entry.maxFeatures
+      }
+    }
+    if (typeof entry.maxFeatures === 'number') importOptions.limit = entry.maxFeatures
+
+    const dataset = createDatasetFromSource(sourceId, importOptions)
+
+    if (dataset.featureCount === 0) {
+      removeSource(sourceId)
+      return { featureCount: 0 }
+    }
+
+    // ── Step 5: register source + dataset ─────────────────────────────────────
+    const sourceRecord = {
+      id: sourceId,
+      type: entry.type ?? 'geojson',
+      fileName: entry.name,
+      meta: {
+        featureCount: meta.featureCount,
+        bbox: meta.bbox,
+        fields: meta.fields,
+        geometryType: meta.geometryType,
+      },
+    }
+    setSources((s) => [...s, sourceRecord])
+    setDatasets((d) => [...d, dataset])
+
+    // ── Step 6: build source layer ────────────────────────────────────────────
+    const effectiveGeomType =
+      entry.geometryType && entry.geometryType !== 'mixed'
+        ? entry.geometryType
+        : meta.geometryType === 'mixed'
+        ? 'polygon'
+        : meta.geometryType
+    const defaultColors = { polygon: '#2f7de1', line: '#ea8b1f', point: '#d4335b' }
+    const layerColor = defaultColors[effectiveGeomType] ?? '#2f7de1'
+    const layerId = `lib-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
+
+    const sourceLayer = {
+      id: layerId,
+      name: entry.name,
+      color: layerColor,
+      geometryType: effectiveGeomType,
+      visible: true,
+      legendLabel: entry.name,
+      style: getDefaultLayerStyle(effectiveGeomType, layerColor),
+      features: [],
+      type: 'source',
+      datasetId: dataset.id,
+      sourceId,
+      meta: {
+        totalFeatureCount: meta.featureCount,
+        loadedFeatureCount: dataset.featureCount,
+        fields: meta.fields ?? [],
+        catalogEntryId: entry.id,
+        dictionaryId: entry.dictionaryId ?? null,
+        preferredField: entry.preferredField ?? null,
+      },
+      legend: {
+        title: entry.name,
+        showCounts: false,
+        orderMode: 'manual',
+        visible: true,
+      },
+    }
+
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, sourceLayer]))
+    setEditableLayerId(layerId)
+
+    return {
+      featureCount: dataset.featureCount,
+      warned: limitHit ? entry.maxFeatures : null,
+    }
   }
 
   // Shared helper: takes a GeoJSON FeatureCollection + a display name and
@@ -1280,6 +1436,20 @@ function App() {
           const current = (l.categorical?.categories ?? []).map(normalizeCategory)
           const { categories: next } = applyDictionaryToCategories(current, dictionary)
           return { ...l, categorical: { ...(l.categorical ?? {}), categories: next } }
+        }
+
+        if (partial._applyCV05Dictionary) {
+          const { dictionary, field: dictField } = partial
+          const current = (l.categorical?.categories ?? []).map(normalizeCategory)
+          const next = current.map((cat) => {
+            if (cat.value == null) return cat
+            const translated = translateCv05Value({ dictionary, field: dictField, value: cat.value })
+            return translated != null ? { ...cat, label: translated } : cat
+          })
+          return {
+            ...l,
+            categorical: { ...(l.categorical ?? {}), field: dictField, categories: next },
+          }
         }
 
         if (partial._generate) {
@@ -1757,6 +1927,12 @@ function App() {
           onClose={() => setShowPaletteManager(false)}
         />
       ) : null}
+      {showLibraryDialog ? (
+        <LibraryDialog
+          onClose={() => setShowLibraryDialog(false)}
+          onImport={handleLibraryImport}
+        />
+      ) : null}
       <TopBar
         projectName={projectName}
         onProjectNameChange={setProjectName}
@@ -1793,6 +1969,7 @@ function App() {
           onRenameGroup={handleRenameGroup}
           onDeleteGroup={handleDeleteGroup}
           onGroupVisibilityChange={handleGroupVisibilityChange}
+          onOpenLibrary={() => setShowLibraryDialog(true)}
         />
         <section className="map-workspace">
           <MapToolbarSimple
@@ -1914,7 +2091,7 @@ function App() {
               className={`rp-tab${rightPanelTab === 'map' ? ' rp-tab--active' : ''}`}
               onClick={() => setRightPanelTab('map')}
             >
-              Mapa
+              Llegenda
             </button>
           </div>
 

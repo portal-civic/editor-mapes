@@ -7,6 +7,7 @@ export function buildProjectData({
   groups,
   projectPalettes = [],
   legendLayout = null,
+  focusMask = null,
   datasets = {},
 }) {
   return {
@@ -24,6 +25,7 @@ export function buildProjectData({
       groups: Array.isArray(groups) ? groups : [],
       palettes: projectPalettes,
       legendLayout,
+      focusMask: focusMask ?? null,
     },
   }
 }

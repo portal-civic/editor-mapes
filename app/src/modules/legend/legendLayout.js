@@ -14,6 +14,8 @@ export const DEFAULT_LEGEND_LAYOUT = {
   margin: 0,            // page-margin around the whole composition (px)
   titlePosition: 'floating', // 'floating' | 'above-map' | 'above-legend'
   maxLegendRows: 0,     // 0 = unlimited; >0 wraps legend to 2 cols in export
+  exportTitleEnabled: false, // whether to draw a title in PNG/PDF export
+  exportTitle: '',           // title text; falls back to projectName when empty
 }
 
 const VALID_POSITIONS = ['inside', 'right', 'left', 'bottom', 'none']
@@ -41,6 +43,8 @@ export function normalizeLegendLayout(raw) {
     titlePosition: VALID_TITLE_POSITIONS.includes(raw.titlePosition) ? raw.titlePosition : d.titlePosition,
     maxLegendRows: typeof raw.maxLegendRows === 'number' && raw.maxLegendRows >= 0
       ? Math.floor(raw.maxLegendRows) : d.maxLegendRows,
+    exportTitleEnabled: typeof raw.exportTitleEnabled === 'boolean' ? raw.exportTitleEnabled : false,
+    exportTitle: typeof raw.exportTitle === 'string' ? raw.exportTitle : '',
   }
 }
 

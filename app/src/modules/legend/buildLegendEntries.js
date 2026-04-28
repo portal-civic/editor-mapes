@@ -17,7 +17,7 @@ export function buildLegendEntry(layer, options = {}) {
   const showLayerNames = options.showLayerNames !== false
   const visibleValues = options.visibleValuesByLayerId?.[layer.id] // Set | undefined
 
-  const rawTitle = layer.legend?.title || layer.legendLabel || layer.name || ''
+  const rawTitle = layer.legend?.title || layer.name || ''
   const title = showLayerNames ? rawTitle : ''
   const showCounts = layer.legend?.showCounts === true
   const orderMode = layer.legend?.orderMode ?? 'manual'
@@ -128,7 +128,7 @@ export function buildLegendEntry(layer, options = {}) {
   }
 
   // Single-style layer
-  const label = resolveLegendLabel(layer.legendLabel || layer.name || '', language)
+  const label = resolveLegendLabel(layer.legend?.title || layer.name || '', language)
   return { title, rows: [{ label, geometryType: layer.geometryType, style: layer.style ?? {} }] }
 }
 

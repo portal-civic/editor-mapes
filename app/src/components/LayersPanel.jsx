@@ -81,6 +81,7 @@ function LayersPanel({
   onRenameGroup,
   onDeleteGroup,
   onGroupVisibilityChange,
+  onOpenLibrary,
 }) {
   const [editingNameLayerId, setEditingNameLayerId] = useState(null)
   const [editingNameValue, setEditingNameValue] = useState('')
@@ -285,6 +286,14 @@ function LayersPanel({
               <button type="button" onClick={() => { onCreatePolygonLayer?.(); setShowNewLayerMenu(false) }}>
                 <GeomSymbol type="polygon" color="#2f7de1" size={14} />
                 Capa de polígons
+              </button>
+              <div className="new-layer-dropdown-divider" />
+              <button type="button" onClick={() => { onOpenLibrary?.(); setShowNewLayerMenu(false) }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <rect x="1" y="1" width="5" height="12" rx="1" fill="currentColor" fillOpacity="0.7" />
+                  <rect x="8" y="1" width="5" height="12" rx="1" fill="currentColor" fillOpacity="0.4" />
+                </svg>
+                Des de biblioteca
               </button>
               <div className="new-layer-dropdown-divider" />
               <button type="button" onClick={() => { onCreateGroup?.(); setShowNewLayerMenu(false) }}>
