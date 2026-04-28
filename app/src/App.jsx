@@ -1027,7 +1027,14 @@ function App() {
       const returned = Array.isArray(parsedData?.features) ? parsedData.features.length : 0
       limitHit = typeof entry.maxFeatures === 'number' && returned >= entry.maxFeatures
     } else {
-      const response = await fetch(entry.path)
+      // entry.path starts with '/' (e.g. '/library/layers/foo.geojson').
+      // Strip the leading slash so new URL() resolves it relative to BASE_URL
+      // ('/editor-mapes/' on GitHub Pages, '/' in local dev).
+      const resolvedPath = new URL(
+        entry.path.replace(/^\//, ''),
+        import.meta.env.BASE_URL,
+      ).href
+      const response = await fetch(resolvedPath)
       if (!response.ok) {
         throw new Error(response.status === 404 ? 'no_file' : 'fetch_failed')
       }
