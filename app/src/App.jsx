@@ -74,6 +74,7 @@ import LegendPanel from './components/LegendPanel'
 import LegendConfigPanel from './components/LegendConfigPanel'
 import SelectedSourceFeaturePanel from './components/SelectedSourceFeaturePanel'
 import LibraryDialog from './components/LibraryDialog'
+import IsochroneModal from './components/IsochroneModal'
 import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
@@ -140,6 +141,9 @@ function App() {
   // projectName: editable inline in TopBar; used for export filename and default PNG title
   const [projectName, setProjectName] = useState('Nou projecte')
   const [showLibraryDialog, setShowLibraryDialog] = useState(false)
+  const [showIsochroneModal, setShowIsochroneModal] = useState(false)
+  const [isochronePickMode, setIsochronePickMode] = useState(false)
+  const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
 
   const selectedBasemap = useMemo(
     () =>
@@ -1849,6 +1853,69 @@ function App() {
     )
   }
 
+  const handleIsochroneRequestPick = () => {
+    setShowIsochroneModal(false)
+    setIsochronePickMode(true)
+  }
+
+  const handleIsochronePickPoint = (latlng) => {
+    setIsochronePickMode(false)
+    setIsochronePickedPoint(latlng)
+    setShowIsochroneModal(true)
+  }
+
+  const handleIsochroneCreateLayer = (geojson, layerName) => {
+    const meta = readGeoJSONMeta(geojson)
+    if (!meta) return
+
+    const sourceId = `src-iso-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    storeSourceFeatures(sourceId, meta.rawFeatures)
+
+    const dataset = createDatasetFromSource(sourceId, {})
+    const layerColor = '#8b5cf6'
+    const layerId = `iso-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
+
+    const sourceRecord = {
+      id: sourceId,
+      type: 'geojson',
+      fileName: layerName,
+      meta: { featureCount: meta.featureCount, bbox: meta.bbox, fields: meta.fields, geometryType: meta.geometryType },
+    }
+    setSources((s) => [...s, sourceRecord])
+    setDatasets((d) => [...d, dataset])
+
+    const sourceLayer = {
+      id: layerId,
+      name: layerName,
+      color: layerColor,
+      geometryType: 'polygon',
+      visible: true,
+      legendLabel: layerName,
+      style: { ...getDefaultLayerStyle('polygon', layerColor), fillOpacity: 0.2, strokeWidth: 2 },
+      features: [],
+      type: 'source',
+      datasetId: dataset.id,
+      sourceId,
+      meta: {
+        totalFeatureCount: meta.featureCount,
+        loadedFeatureCount: dataset.featureCount,
+        fields: meta.fields ?? [],
+      },
+      legend: { title: layerName, showCounts: false, orderMode: 'manual', visible: true },
+    }
+
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, sourceLayer]))
+    setEditableLayerId(layerId)
+
+    if (meta.bbox && mapInstanceRef.current) {
+      const [west, south, east, north] = meta.bbox
+      if ([west, south, east, north].every(Number.isFinite)) {
+        const requestId = `${Date.now()}-${Math.random()}`
+        setMapNavigationRequest({ id: requestId, type: 'fitBounds', bounds: [[south, west], [north, east]] })
+      }
+    }
+  }
+
   const handleDeleteLayer = (layerId) => {
     setLayers((currentLayers) => {
       const layerToDelete = currentLayers.find(
@@ -1981,6 +2048,26 @@ function App() {
           onImport={handleLibraryImport}
         />
       ) : null}
+      {showIsochroneModal ? (
+        <IsochroneModal
+          pickedPoint={isochronePickedPoint}
+          onRequestPick={handleIsochroneRequestPick}
+          onCreateLayer={handleIsochroneCreateLayer}
+          onClose={() => setShowIsochroneModal(false)}
+        />
+      ) : null}
+      {isochronePickMode ? (
+        <div className="iso-pick-banner">
+          <span>Clica el mapa per seleccionar el punt d'origen</span>
+          <button
+            type="button"
+            className="iso-pick-banner-cancel"
+            onClick={() => { setIsochronePickMode(false); setShowIsochroneModal(true) }}
+          >
+            Cancel·lar
+          </button>
+        </div>
+      ) : null}
       <TopBar
         projectName={projectName}
         onProjectNameChange={setProjectName}
@@ -2000,6 +2087,7 @@ function App() {
         onExportAllLayers={handleExportAllLayers}
         onExportPDFSimple={handleExportPDFSimple}
         onExportBasemapHD={handleExportBasemapHD}
+        onCreateIsochrone={() => { setIsochronePickedPoint(null); setShowIsochroneModal(true) }}
       />
 
       <main className="workspace">
@@ -2104,6 +2192,8 @@ function App() {
                 focusMask={focusMask}
                 legendEntries={showExternalLegend || lpos === 'none' ? [] : legendEntries}
                 legendLayout={legendLayout}
+                pickPointMode={isochronePickMode}
+                onPickPoint={handleIsochronePickPoint}
               />
             )
 

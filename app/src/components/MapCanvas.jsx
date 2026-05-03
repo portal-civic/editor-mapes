@@ -47,12 +47,20 @@ function MapClickHandler({
   canAddPoint,
   canAddLine,
   canAddPolygon,
+  canPickPoint,
   onPointAdd,
   onLinePointAdd,
   onPolygonPointAdd,
+  onPickPoint,
 }) {
   useMapEvents({
     click(event) {
+      if (canPickPoint) {
+        const { lat, lng } = event.latlng
+        onPickPoint?.([lat, lng])
+        return
+      }
+
       if (canAddPoint) {
         const { lat, lng } = event.latlng
         onPointAdd?.([lat, lng])
@@ -75,12 +83,12 @@ function MapClickHandler({
   return null
 }
 
-function MapCursorHandler({ isDrawMode, hasSelectableSourceLayers }) {
+function MapCursorHandler({ isDrawMode, pickPointMode, hasSelectableSourceLayers }) {
   const map = useMap()
 
   useEffect(() => {
     const container = map.getContainer()
-    const cursorValue = isDrawMode ? 'crosshair' : hasSelectableSourceLayers ? 'pointer' : ''
+    const cursorValue = isDrawMode || pickPointMode ? 'crosshair' : hasSelectableSourceLayers ? 'pointer' : ''
 
     container.style.cursor = cursorValue
     container.querySelectorAll('.leaflet-pane, .leaflet-interactive').forEach((el) => {
@@ -95,7 +103,7 @@ function MapCursorHandler({ isDrawMode, hasSelectableSourceLayers }) {
           el.style.cursor = ''
         })
     }
-  }, [isDrawMode, hasSelectableSourceLayers, map])
+  }, [isDrawMode, pickPointMode, hasSelectableSourceLayers, map])
 
   return null
 }
@@ -522,6 +530,8 @@ function MapCanvas({
   selectedSourceFeature = null,
   legendEntries = [],
   legendLayout = null,
+  pickPointMode = false,
+  onPickPoint,
 }) {
   const tileLayerProps = getTileLayerProps(selectedBasemap)
   const isPointMode = activeWorkModeId === 'point'
@@ -726,6 +736,7 @@ function MapCanvas({
         <MapLayerPanes orderedLayerIds={visibleLayerOrder} />
         <MapCursorHandler
           isDrawMode={isDrawMode}
+          pickPointMode={pickPointMode}
           hasSelectableSourceLayers={
             isSelectMode && sourceLayers.some((l) => l.geometryType === 'polygon')
           }
@@ -741,9 +752,11 @@ function MapCanvas({
           canAddPoint={isPointMode}
           canAddLine={isLineMode}
           canAddPolygon={isPolygonMode}
+          canPickPoint={pickPointMode}
           onPointAdd={onPointAdd}
           onLinePointAdd={onDraftLinePointAdd}
           onPolygonPointAdd={onDraftPolygonPointAdd}
+          onPickPoint={onPickPoint}
         />
         <ZoomControl position="topright" />
         <TileLayer

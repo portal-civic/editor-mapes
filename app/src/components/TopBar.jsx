@@ -35,6 +35,7 @@ function TopBar({
   onExportAllLayers,
   onExportPDFSimple,
   onExportBasemapHD,
+  onCreateIsochrone,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -44,6 +45,7 @@ function TopBar({
   const [showLegend, setShowLegend] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showImportMenu, setShowImportMenu] = useState(false)
+  const [showToolsMenu, setShowToolsMenu] = useState(false)
   const [hdWidth, setHdWidth] = useState('10000')
   const [hdHeight, setHdHeight] = useState('')
   const [hdZoomMode, setHdZoomMode] = useState('auto')
@@ -62,6 +64,7 @@ function TopBar({
 
   const exportMenuRef = useRef(null)
   const importMenuRef = useRef(null)
+  const toolsMenuRef = useRef(null)
 
   const canSearch = searchQuery.trim().length >= SEARCH_MIN_CHARS
 
@@ -134,6 +137,15 @@ function TopBar({
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [showImportMenu])
+
+  useEffect(() => {
+    if (!showToolsMenu) return
+    const handleOutside = (e) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target)) setShowToolsMenu(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showToolsMenu])
 
   const commitName = () => {
     const trimmed = nameInput.trim() || 'Nou projecte'
@@ -304,6 +316,29 @@ function TopBar({
         <button type="button" className="topbar-btn" onClick={onOpenProject}>
           Obrir
         </button>
+
+        {/* Tools dropdown */}
+        <div className="topbar-dropdown-wrapper" ref={toolsMenuRef}>
+          <button
+            type="button"
+            className="topbar-btn"
+            onClick={() => setShowToolsMenu((v) => !v)}
+          >
+            Eines ▾
+          </button>
+          {showToolsMenu ? (
+            <div className="topbar-dropdown-panel">
+              <div className="topbar-dropdown-section">Anàlisi</div>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onCreateIsochrone?.(); setShowToolsMenu(false) }}
+              >
+                Crear isòcrona
+              </button>
+            </div>
+          ) : null}
+        </div>
 
         {/* Import dropdown */}
         <div className="topbar-dropdown-wrapper" ref={importMenuRef}>
