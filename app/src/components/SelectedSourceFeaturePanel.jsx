@@ -1,4 +1,4 @@
-import { normalizeCategoricalStyle } from '../modules/sources/categoricalStyle'
+import { normalizeCategory } from '../modules/sources/categoricalStyle'
 
 function formatArea(m2) {
   if (m2 >= 1_000_000) return `${(m2 / 1_000_000).toFixed(2)} km²`
@@ -53,6 +53,72 @@ function readOverride(raw) {
   }
 }
 
+function CategoryBadge({ layer, feature, featureKey }) {
+  if (layer?.styleMode !== 'categorical') return null
+
+  const field = layer.categorical?.field
+  if (!field) return null
+
+  const rawVal = feature?.properties?.[field]
+  const valStr = rawVal == null ? null : String(rawVal)
+
+  const categories = (layer.categorical?.categories ?? []).map(normalizeCategory)
+  const cat = valStr != null
+    ? categories.find((c) => String(c.value) === valStr)
+    : null
+
+  const hasOwnStyle = layer?.featureOverrides?.[featureKey] != null
+  const isInLegend = layer?.featureOverrides?.[featureKey]?.showInLegend === true
+
+  const label = cat
+    ? (cat.label && cat.label !== String(cat.value) ? cat.label : null)
+    : null
+  const displayLabel = label ?? (cat ? String(cat.value) : null)
+
+  return (
+    <div className="ssf-section ssf-cat-section">
+      <p className="ssf-section-title">Categoria</p>
+
+      {cat ? (
+        <div className="ssf-cat-row">
+          <span
+            className="ssf-cat-swatch"
+            style={{ background: cat.color ?? '#888888' }}
+            aria-hidden="true"
+          />
+          <div className="ssf-cat-info">
+            <span className="ssf-cat-label">{displayLabel}</span>
+            {label && (
+              <span className="ssf-cat-value">{valStr}</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="ssf-cat-row ssf-cat-row--unknown">
+          <span className="ssf-cat-swatch ssf-cat-swatch--unknown" aria-hidden="true" />
+          <div className="ssf-cat-info">
+            <span className="ssf-cat-label ssf-cat-label--unknown">Categoria no identificada</span>
+            {valStr != null && (
+              <span className="ssf-cat-value">{valStr}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(hasOwnStyle || isInLegend) && (
+        <div className="ssf-cat-badges">
+          {hasOwnStyle && (
+            <span className="ssf-cat-badge">Estil propi aplicat</span>
+          )}
+          {isInLegend && (
+            <span className="ssf-cat-badge ssf-cat-badge--legend">Element destacat en llegenda</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SelectedSourceFeaturePanel({
   feature,
   featureKey,
@@ -85,6 +151,8 @@ export default function SelectedSourceFeaturePanel({
           <span className="ssf-meta-key" title={featureKey}>{featureKey}</span>
         </div>
       </div>
+
+      <CategoryBadge layer={layer} feature={feature} featureKey={featureKey} />
 
       {area != null ? (
         <div className="ssf-section">

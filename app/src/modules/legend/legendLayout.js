@@ -10,6 +10,10 @@ export const DEFAULT_LEGEND_LAYOUT = {
   showOnlyVisibleInViewport: false,
   showLayerNames: true,
   language: 'val',      // 'val' | 'cas' | 'eng'
+  // Polygon spatial filter for legend categories
+  filterByPolygon: false,
+  polygonLayerId: null,     // id of the reference polygon layer
+  polygonFeatureIndex: null, // null = all features, number = specific feature
   // export layout
   margin: 0,            // page-margin around the whole composition (px)
   titlePosition: 'floating', // 'floating' | 'above-map' | 'above-legend'
@@ -43,6 +47,9 @@ export function normalizeLegendLayout(raw) {
     titlePosition: VALID_TITLE_POSITIONS.includes(raw.titlePosition) ? raw.titlePosition : d.titlePosition,
     maxLegendRows: typeof raw.maxLegendRows === 'number' && raw.maxLegendRows >= 0
       ? Math.floor(raw.maxLegendRows) : d.maxLegendRows,
+    filterByPolygon: typeof raw.filterByPolygon === 'boolean' ? raw.filterByPolygon : false,
+    polygonLayerId: typeof raw.polygonLayerId === 'string' ? raw.polygonLayerId : null,
+    polygonFeatureIndex: typeof raw.polygonFeatureIndex === 'number' ? raw.polygonFeatureIndex : null,
     exportTitleEnabled: typeof raw.exportTitleEnabled === 'boolean' ? raw.exportTitleEnabled : false,
     exportTitle: typeof raw.exportTitle === 'string' ? raw.exportTitle : '',
   }

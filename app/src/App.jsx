@@ -63,6 +63,7 @@ import {
 import { PALETTES } from './modules/styles/palettes'
 import { buildLegendEntries } from './modules/legend/buildLegendEntries'
 import { DEFAULT_LEGEND_LAYOUT, normalizeLegendLayout } from './modules/legend/legendLayout'
+import { computeVisibleValuesByPolygon } from './modules/legend/polygonFilter'
 import {
   applyDictionaryToCategories,
   ALL_DICTIONARIES,
@@ -144,6 +145,10 @@ function App() {
   const [showIsochroneModal, setShowIsochroneModal] = useState(false)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
+  // rightPanelExpanded: local UI state — not persisted to project
+  const [rightPanelExpanded, setRightPanelExpanded] = useState(false)
+  // mapComposition: aspect-ratio constraint for the map canvas area
+  const [mapComposition, setMapComposition] = useState({ mode: 'auto' })
 
   const selectedBasemap = useMemo(
     () =>
@@ -258,9 +263,18 @@ function App() {
     [layers],
   )
 
-  // Viewport-visible category values for categorical source layers.
-  // Only populated when showOnlyVisibleInViewport is active.
+  // Category values visible within a polygon or viewport — used to filter legend entries.
+  // Polygon filter takes priority over viewport filter when both are active.
   const visibleValuesByLayerId = useMemo(() => {
+    // Priority 1: polygon spatial filter
+    if (legendLayout.filterByPolygon && legendLayout.polygonLayerId) {
+      const refLayer = layers.find((l) => l.id === legendLayout.polygonLayerId && l.visible)
+      if (refLayer) {
+        return computeVisibleValuesByPolygon(layers, refLayer, legendLayout.polygonFeatureIndex)
+      }
+    }
+
+    // Priority 2: viewport filter
     if (!legendLayout.showOnlyVisibleInViewport || !mapViewport) return null
     const result = {}
     for (const layer of layers) {
@@ -279,7 +293,11 @@ function App() {
       result[layer.id] = values
     }
     return result
-  }, [legendLayout.showOnlyVisibleInViewport, layers, mapViewport])
+  }, [
+    legendLayout.filterByPolygon, legendLayout.polygonLayerId, legendLayout.polygonFeatureIndex,
+    legendLayout.showOnlyVisibleInViewport,
+    layers, mapViewport,
+  ])
 
   const legendEntries = useMemo(
     () => buildLegendEntries(layers, {
@@ -2090,7 +2108,7 @@ function App() {
         onCreateIsochrone={() => { setIsochronePickedPoint(null); setShowIsochroneModal(true) }}
       />
 
-      <main className="workspace">
+      <main className={`workspace${rightPanelExpanded ? ' workspace--wide-panel' : ''}`}>
         <LayersPanel
           layers={layers}
           groups={groups}
@@ -2159,6 +2177,18 @@ function App() {
                 ? 'map-area-wrap map-area-wrap--bottom'
                 : 'map-area-wrap'
 
+            // Aspect ratio for fixed composition mode
+            const aspectRatios = {
+              '16:9': 16 / 9, '4:3': 4 / 3,
+              'a4-land': 297 / 210, 'a4-port': 210 / 297,
+              'square': 1,
+            }
+            const fixedAspect = mapComposition.mode === 'fixed'
+              ? (mapComposition.ratio === 'custom'
+                ? (mapComposition.customW ?? 16) / (mapComposition.customH ?? 9)
+                : aspectRatios[mapComposition.ratio] ?? null)
+              : null
+
             const mapCanvasEl = (
               <MapCanvas
                 selectedBasemap={selectedBasemap}
@@ -2210,10 +2240,16 @@ function App() {
               </div>
             ) : null
 
+            const mapEl = fixedAspect ? (
+              <div className="map-aspect-wrap" style={{ aspectRatio: fixedAspect }}>
+                {mapCanvasEl}
+              </div>
+            ) : mapCanvasEl
+
             return (
               <div className={wrapClass}>
                 {lpos === 'left' && legendColumnEl}
-                {mapCanvasEl}
+                {mapEl}
                 {lpos !== 'left' && legendColumnEl}
               </div>
             )
@@ -2281,6 +2317,8 @@ function App() {
                 onToggleLayerInMask={handleToggleLayerInMask}
                 onMaskOpacityChange={handleMaskOpacityChange}
                 onMaskColorChange={handleMaskColorChange}
+                panelExpanded={rightPanelExpanded}
+                onTogglePanelExpand={() => setRightPanelExpanded((v) => !v)}
               />
             ) : (
               <aside className="panel panel-right inspector-empty">
@@ -2291,6 +2329,9 @@ function App() {
             <LegendConfigPanel
               layout={normalizeLegendLayout(legendLayout)}
               onChange={setLegendLayout}
+              layers={layers}
+              mapComposition={mapComposition}
+              onMapCompositionChange={setMapComposition}
             />
           )}
         </div>

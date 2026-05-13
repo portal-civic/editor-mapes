@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
+import { generateHarmoniousColors } from '../modules/styles/colorGenerate'
 
 function ColorRow({ color, index, total, onChangeColor, onMove, onRemove }) {
   return (
@@ -36,7 +37,29 @@ function ColorRow({ color, index, total, onChangeColor, onMove, onRemove }) {
   )
 }
 
-function PaletteCard({ palette, expanded, onToggleExpand, onRename, onDuplicate, onDelete, onChangeColor, onAddColor, onMoveColor, onRemoveColor }) {
+const INTENSITY_LABELS = [
+  { value: 'soft', label: 'Suau' },
+  { value: 'balanced', label: 'Equilibrada' },
+  { value: 'contrast', label: 'Contrastada' },
+]
+
+function PaletteCard({ palette, expanded, onToggleExpand, onRename, onDuplicate, onDelete, onChangeColor, onAddColor, onMoveColor, onRemoveColor, onSetColors }) {
+  const [genCount, setGenCount] = useState(12)
+  const [genIntensity, setGenIntensity] = useState('balanced')
+  const [genPreview, setGenPreview] = useState(null)
+
+  const handlePreview = () => {
+    const generated = generateHarmoniousColors(palette.colors, genCount, genIntensity)
+    setGenPreview(generated)
+  }
+
+  const handleApply = () => {
+    if (genPreview) {
+      onSetColors(palette.id, genPreview)
+      setGenPreview(null)
+    }
+  }
+
   return (
     <div className="palmgr-card">
       <div className="palmgr-card-header">
@@ -96,6 +119,59 @@ function PaletteCard({ palette, expanded, onToggleExpand, onRename, onDuplicate,
           >
             + Afegir color
           </button>
+
+          {/* Color generation section */}
+          <div className="palmgr-generate">
+            <p className="palmgr-generate-title">Generar colors addicionals</p>
+            <div className="palmgr-generate-controls">
+              <label className="palmgr-generate-label">Total colors</label>
+              <input
+                type="number"
+                className="palmgr-generate-num"
+                min={palette.colors.length + 1}
+                max={40}
+                value={genCount}
+                onChange={(e) => { setGenCount(Math.max(palette.colors.length + 1, Number(e.target.value) || 2)); setGenPreview(null) }}
+              />
+              <label className="palmgr-generate-label">Intensitat</label>
+              <select
+                className="palmgr-generate-select"
+                value={genIntensity}
+                onChange={(e) => { setGenIntensity(e.target.value); setGenPreview(null) }}
+              >
+                {INTENSITY_LABELS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {genPreview && (
+              <div className="palmgr-generate-preview">
+                <span className="palmgr-generate-preview-label">Previsualització ({genPreview.length})</span>
+                <div className="palmgr-generate-swatches">
+                  {genPreview.map((c, i) => (
+                    <span
+                      key={i}
+                      className={`palmgr-swatch${i < palette.colors.length ? ' palmgr-swatch--seed' : ''}`}
+                      style={{ background: c }}
+                      title={`${c}${i < palette.colors.length ? ' (original)' : ' (generat)'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="palmgr-generate-actions">
+              <button type="button" className="palmgr-generate-btn" onClick={handlePreview}>
+                Previsualitzar
+              </button>
+              {genPreview && (
+                <button type="button" className="palmgr-generate-btn palmgr-generate-btn--apply" onClick={handleApply}>
+                  Aplicar paleta
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -154,6 +230,9 @@ export default function PaletteManagerDialog({ palettes = [], onClose, onChange 
     onChange(palettes.map((p) => (p.id === id ? { ...p, colors: arr } : p)))
   }
 
+  const setColors = (id, colors) =>
+    onChange(palettes.map((p) => (p.id === id ? { ...p, colors } : p)))
+
   return (
     <div className="dialog-overlay">
       <div className="dialog-panel dialog-panel--tall palmgr-panel">
@@ -190,6 +269,7 @@ export default function PaletteManagerDialog({ palettes = [], onClose, onChange 
                   onAddColor={addColor}
                   onMoveColor={moveColor}
                   onRemoveColor={removeColor}
+                  onSetColors={setColors}
                 />
               ))
             )}
