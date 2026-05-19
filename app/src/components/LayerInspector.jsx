@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import IconPicker from './IconPicker'
 import CategoryEditorModal from './CategoryEditorModal'
 import PoiFilterPanel from './PoiFilterPanel'
+import InspectorTabs from '../ui/inspector/InspectorTabs'
+import {
+  InspectorField,
+  InspectorToolbar,
+  InspectorDivider,
+  InspectorEmptyState,
+  InspectorBadge,
+  InspectorButtonGroup,
+} from '../ui/inspector/components'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { hasActiveFilters } from '../modules/filters/layerFilters'
 import { normalizeCategory, normalizeCategoricalStyle } from '../modules/sources/categoricalStyle'
@@ -42,8 +51,9 @@ function SecBlock({ id, title, collapsed, onToggle, children, className = '' }) 
 }
 
 // ─── CategoricalStyleEditor ───────────────────────────────────────────────────
+// activeSection: 'dades' | 'estil' — controls which SecBlocks to render
 
-function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange, onFeatureOverrideChange, projectPalettes = [], onManagePalettes }) {
+function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegendChange, onFeatureOverrideChange, projectPalettes = [], onManagePalettes, activeSection }) {
   const fields = layer.meta?.fields ?? []
   const categorical = layer.categorical ?? {}
   const field = categorical.field ?? ''
@@ -126,7 +136,6 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
   const updateCategories = (next) =>
     onLayerCategoricalChange?.(layer.id, { field, categories: next })
 
-  // ── Quick actions ─────────────────────────────────────────────────────────
   const hideAllLegend = () => updateCategories(categories.map((c) => ({ ...c, legendVisible: false })))
   const showAllLegend = () => updateCategories(categories.map((c) => ({ ...c, legendVisible: true })))
   const syncLegendToMap = () => updateCategories(categories.map((c) => ({ ...c, legendVisible: c.visible !== false })))
@@ -143,7 +152,8 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
   const updateOverride = (featureKey, partial) =>
     onFeatureOverrideChange?.(layer.id, featureKey, partial)
 
-  return (
+  // ── Dades section ─────────────────────────────────────────────────────────
+  const dadesSection = (
     <>
       {showModal && (
         <CategoryEditorModal
@@ -154,7 +164,6 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
         />
       )}
 
-      {/* ── Dades ─────────────────────────────────────────────────────── */}
       <SecBlock id="dades" title="Dades" collapsed={isCollapsed('dades')} onToggle={toggle}>
         <div className="catdiag-info">
           <span>
@@ -219,7 +228,6 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
         ) : null}
       </SecBlock>
 
-      {/* ── Classificació ─────────────────────────────────────────────── */}
       <SecBlock id="classificacio" title="Classificació" collapsed={isCollapsed('classificacio')} onToggle={toggle}>
         {cv05Dict ? (() => {
           const applyField = cv05FieldMode
@@ -398,8 +406,28 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
           </p>
         )}
       </SecBlock>
+    </>
+  )
 
-      {/* ── Paleta ────────────────────────────────────────────────────── */}
+  // ── Estil section ─────────────────────────────────────────────────────────
+  const cs = normalizeCategoricalStyle(layer.categorical?.categoricalStyle)
+  const updateCs = (patch) =>
+    onLayerCategoricalChange?.(layer.id, {
+      _updateCatStyle: true,
+      categoricalStyle: { ...cs, ...patch },
+    })
+
+  const estilSection = (
+    <>
+      {showModal && (
+        <CategoryEditorModal
+          categories={categories}
+          field={field}
+          onUpdateCategories={(next) => onLayerCategoricalChange?.(layer.id, { field, categories: next })}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+
       {field ? (
         <SecBlock id="paleta" title="Paleta" collapsed={isCollapsed('paleta')} onToggle={toggle}>
           <div className="cat-palette-row">
@@ -478,7 +506,6 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
         </SecBlock>
       ) : null}
 
-      {/* ── Categories ────────────────────────────────────────────────── */}
       {categories.length > 0 ? (
         <SecBlock
           id="categories"
@@ -520,78 +547,68 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
         </SecBlock>
       ) : null}
 
-      {/* ── Estil global ──────────────────────────────────────────────── */}
-      {categories.length > 0 ? (() => {
-        const cs = normalizeCategoricalStyle(layer.categorical?.categoricalStyle)
-        const updateCs = (patch) =>
-          onLayerCategoricalChange?.(layer.id, {
-            _updateCatStyle: true,
-            categoricalStyle: { ...cs, ...patch },
-          })
-        return (
-          <SecBlock id="estil-global" title="Estil global" collapsed={isCollapsed('estil-global')} onToggle={toggle}>
+      {categories.length > 0 ? (
+        <SecBlock id="estil-global" title="Estil global" collapsed={isCollapsed('estil-global')} onToggle={toggle}>
+          <label className="cat-gs-row">
+            <span>Opacitat farcit</span>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={cs.fillOpacity}
+              onChange={(e) => updateCs({ fillOpacity: Number(e.target.value) })}
+            />
+            <span className="cat-gs-val">{Math.round(cs.fillOpacity * 100)}%</span>
+          </label>
+          <label className="cat-gs-row">
+            <span>Contorn</span>
+            <select
+              value={cs.strokeMode}
+              onChange={(e) => updateCs({ strokeMode: e.target.value })}
+            >
+              <option value="category">Color de categoria</option>
+              <option value="fixed">Color fix</option>
+            </select>
+          </label>
+          {cs.strokeMode === 'fixed' ? (
             <label className="cat-gs-row">
-              <span>Opacitat farcit</span>
+              <span>Color contorn fix</span>
               <input
-                type="range" min="0" max="1" step="0.05"
-                value={cs.fillOpacity}
-                onChange={(e) => updateCs({ fillOpacity: Number(e.target.value) })}
-              />
-              <span className="cat-gs-val">{Math.round(cs.fillOpacity * 100)}%</span>
-            </label>
-            <label className="cat-gs-row">
-              <span>Contorn</span>
-              <select
-                value={cs.strokeMode}
-                onChange={(e) => updateCs({ strokeMode: e.target.value })}
-              >
-                <option value="category">Color de categoria</option>
-                <option value="fixed">Color fix</option>
-              </select>
-            </label>
-            {cs.strokeMode === 'fixed' ? (
-              <label className="cat-gs-row">
-                <span>Color contorn fix</span>
-                <input
-                  type="color"
-                  value={cs.fixedStrokeColor}
-                  onChange={(e) => updateCs({ fixedStrokeColor: e.target.value })}
-                />
-              </label>
-            ) : null}
-            <label className="cat-gs-row">
-              <span>Opacitat contorn</span>
-              <input
-                type="range" min="0" max="1" step="0.05"
-                value={cs.strokeOpacity}
-                onChange={(e) => updateCs({ strokeOpacity: Number(e.target.value) })}
-              />
-              <span className="cat-gs-val">{Math.round(cs.strokeOpacity * 100)}%</span>
-            </label>
-            <label className="cat-gs-row">
-              <span>Amplada contorn</span>
-              <input
-                type="number" min="0" max="20" step="0.5"
-                value={cs.strokeWidth}
-                onChange={(e) => updateCs({ strokeWidth: Number(e.target.value) || 0 })}
+                type="color"
+                value={cs.fixedStrokeColor}
+                onChange={(e) => updateCs({ fixedStrokeColor: e.target.value })}
               />
             </label>
-            <label className="cat-gs-row">
-              <span>Estil línia</span>
-              <select
-                value={cs.dashStyle}
-                onChange={(e) => updateCs({ dashStyle: e.target.value })}
-              >
-                <option value="solid">Contínua</option>
-                <option value="dashed">Discontínua</option>
-                <option value="dotted">Puntejada</option>
-              </select>
-            </label>
-          </SecBlock>
-        )
-      })() : null}
+          ) : null}
+          <label className="cat-gs-row">
+            <span>Opacitat contorn</span>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={cs.strokeOpacity}
+              onChange={(e) => updateCs({ strokeOpacity: Number(e.target.value) })}
+            />
+            <span className="cat-gs-val">{Math.round(cs.strokeOpacity * 100)}%</span>
+          </label>
+          <label className="cat-gs-row">
+            <span>Amplada contorn</span>
+            <input
+              type="number" min="0" max="20" step="0.5"
+              value={cs.strokeWidth}
+              onChange={(e) => updateCs({ strokeWidth: Number(e.target.value) || 0 })}
+            />
+          </label>
+          <label className="cat-gs-row">
+            <span>Estil línia</span>
+            <select
+              value={cs.dashStyle}
+              onChange={(e) => updateCs({ dashStyle: e.target.value })}
+            >
+              <option value="solid">Contínua</option>
+              <option value="dashed">Discontínua</option>
+              <option value="dotted">Puntejada</option>
+            </select>
+          </label>
+        </SecBlock>
+      ) : null}
 
-      {/* ── Llegenda (layer-level) ─────────────────────────────────────── */}
       {categories.length > 0 ? (
         <SecBlock id="llegenda-cat" title="Llegenda" collapsed={isCollapsed('llegenda-cat')} onToggle={toggle}>
           <label className="cat-legend-row">
@@ -695,6 +712,10 @@ function CategoricalStyleEditor({ layer, onLayerCategoricalChange, onLayerLegend
       ) : null}
     </>
   )
+
+  if (activeSection === 'dades') return dadesSection
+  if (activeSection === 'estil') return estilSection
+  return null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -770,6 +791,7 @@ function LayerInspector({
   onTogglePanelExpand,
 }) {
   const [nameValue, setNameValue] = useState(layer.name)
+  const [activeTab, setActiveTab] = useState('propietats')
   const layerStyle = layer.style || {}
   const featureCount = Array.isArray(layer.features) ? layer.features.length : 0
   const geomLabel =
@@ -801,13 +823,18 @@ function LayerInspector({
     }
   }
 
+  const tabBadges = {
+    filtres: hasActiveFilters(layer.filters) ? '●' : undefined,
+  }
+
   return (
     <aside className={`panel panel-right${panelExpanded ? ' panel-right--expanded' : ''}`}>
+      {/* Fixed header */}
       <div className="panel-header">
-        <h2>Propietats</h2>
         <span className="inspector-geom-symbol">
           <GeomSymbol type={layer.geometryType} color={symbolColor} size={14} />
         </span>
+        <span className="panel-header-layer-name" title={layer.name}>{layer.name}</span>
         {onTogglePanelExpand ? (
           <button
             type="button"
@@ -821,457 +848,516 @@ function LayerInspector({
         ) : null}
       </div>
 
-      <div className="inspector-content">
-        {/* ── Identitat ──────────────────────────────────────────── */}
-        <div className="inspector-section inspector-identity">
-          <input
-            className="layer-props-name-input"
-            value={nameValue}
-            onChange={(e) => setNameValue(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur()
-              if (e.key === 'Escape') {
-                setNameValue(layer.name)
-                e.currentTarget.blur()
-              }
-            }}
-            aria-label="Nom de la capa"
-          />
-          <p className="layer-props-meta">
-            {geomLabel} · {featureCount} {featureCount === 1 ? 'element' : 'elements'}
-          </p>
-          {layer.type === 'source' ? (
-            <div className="lf-inspector-row">
+      {/* Fixed tab bar */}
+      <InspectorTabs activeTab={activeTab} onTabChange={setActiveTab} badges={tabBadges} />
+
+      {/* Single scroll body */}
+      <div className="insp-tab-body">
+
+        {/* ═══ PROPIETATS ═══════════════════════════════════════════════════ */}
+        {activeTab === 'propietats' && (
+          <div className="insp-tab-content">
+            <div className="inspector-identity">
+              <input
+                className="layer-props-name-input"
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Escape') {
+                    setNameValue(layer.name)
+                    e.currentTarget.blur()
+                  }
+                }}
+                aria-label="Nom de la capa"
+              />
+              <p className="insp-layer-meta">
+                {geomLabel} · {featureCount.toLocaleString()} {featureCount === 1 ? 'element' : 'elements'}
+              </p>
+              {groups.length > 0 ? (
+                <InspectorField label="Grup">
+                  <select
+                    value={layer.groupId ?? ''}
+                    onChange={(e) => onSetLayerGroup?.(layer.id, e.target.value || null)}
+                  >
+                    <option value="">— Cap grup —</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </InspectorField>
+              ) : null}
+            </div>
+
+            <SecBlock id="ordre" title="Ordre" collapsed={isCollapsed('ordre')} onToggle={toggle}>
+              <InspectorButtonGroup>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary"
+                  disabled={layerIndex === 0}
+                  onClick={() => onMoveLayerUp?.(layer.id)}
+                >
+                  ↑ Pujar
+                </button>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary"
+                  disabled={layerIndex === totalLayers - 1}
+                  onClick={() => onMoveLayerDown?.(layer.id)}
+                >
+                  ↓ Baixar
+                </button>
+              </InspectorButtonGroup>
+            </SecBlock>
+
+            <SecBlock id="exportar" title="Exportar" collapsed={isCollapsed('exportar')} onToggle={toggle}>
+              <div className="layer-props-actions">
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary ui-btn-full"
+                  onClick={() => onExportLayerGeoJSON?.(layer.id)}
+                >
+                  Exportar GeoJSON
+                </button>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary ui-btn-full"
+                  onClick={() => onExportLayerSVG?.(layer.id)}
+                >
+                  Exportar SVG (prova)
+                </button>
+                {layer.geometryType === 'point' ? (
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn-secondary ui-btn-full"
+                    onClick={() => onExportLayerHybrid?.(layer.id)}
+                  >
+                    Exportar PNG + SVG (prova)
+                  </button>
+                ) : null}
+              </div>
+            </SecBlock>
+
+            <div className="insp-danger-zone">
               <button
                 type="button"
-                className="lf-filter-open-btn"
-                onClick={() => onOpenFilterModal?.(layer.id)}
+                className="ui-btn ui-btn-danger ui-btn-full"
+                onClick={() => onDeleteLayer?.(layer.id)}
               >
-                Filtrar dades…
+                Eliminar capa
               </button>
-              {hasActiveFilters(layer.filters) && (
-                <span className="lf-filter-badge">FILTRADA</span>
-              )}
             </div>
-          ) : null}
-          {groups.length > 0 ? (
-            <label className="layer-group-select-label">
-              Grup
-              <select
-                value={layer.groupId ?? ''}
-                onChange={(e) => onSetLayerGroup?.(layer.id, e.target.value || null)}
-              >
-                <option value="">— Cap grup —</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-        </div>
-
-        {/* ── Estil ──────────────────────────────────────────────── */}
-        <SecBlock id="estil" title="Estil" collapsed={isCollapsed('estil')} onToggle={toggle}>
-          {layer.type === 'source' ? (
-            <label>
-              Mode d'estil
-              <select
-                value={layer.styleMode ?? 'single'}
-                onChange={(e) => onLayerStyleModeChange?.(layer.id, e.target.value)}
-              >
-                <option value="single">Estil únic</option>
-                <option value="categorical">Per atribut</option>
-              </select>
-            </label>
-          ) : null}
-
-          {layer.styleMode === 'categorical' ? (
-            <CategoricalStyleEditor
-              layer={layer}
-              onLayerCategoricalChange={onLayerCategoricalChange}
-              onLayerLegendChange={onLayerLegendChange}
-              onFeatureOverrideChange={onFeatureOverrideChange}
-              projectPalettes={projectPalettes}
-              onManagePalettes={onManagePalettes}
-            />
-          ) : (
-            <div className="layer-style-editor">
-              {layer.geometryType === 'point' ? (
-                <>
-                  <label>
-                    Tipus de marcador
-                    <select
-                      value={layerStyle.markerType ?? 'circle'}
-                      onChange={(e) => {
-                        const nextType = e.target.value
-                        if (nextType === 'icon-circle') {
-                          onLayerStyleChange?.(layer.id, {
-                            markerType: 'icon-circle',
-                            size: 40,
-                            strokeColor: '#ffffff',
-                            strokeWidth: 3,
-                            iconColor: '#ffffff',
-                          })
-                        } else {
-                          onLayerStyleChange?.(layer.id, { markerType: nextType })
-                        }
-                      }}
-                    >
-                      <option value="circle">Cercle</option>
-                      <option value="icon-circle">Cercle amb icona</option>
-                    </select>
-                  </label>
-
-                  {(layerStyle.markerType ?? 'circle') === 'icon-circle' ? (
-                    <>
-                      <p className="icon-picker-label">Icona</p>
-                      <IconPicker
-                        selectedIconId={layerStyle.icon ?? null}
-                        onSelect={(iconId) =>
-                          onLayerStyleChange?.(layer.id, { icon: iconId, iconSet: 'fa' })
-                        }
-                      />
-                      <label>
-                        Color icona
-                        <input
-                          type="color"
-                          value={layerStyle.iconColor ?? '#ffffff'}
-                          onChange={(e) =>
-                            onLayerStyleChange?.(layer.id, { iconColor: e.target.value })
-                          }
-                        />
-                      </label>
-                    </>
-                  ) : null}
-
-                  <label>
-                    Mida
-                    <input
-                      type="number" min="6" max="60"
-                      value={resolvePointSize(layerStyle, (layerStyle.markerType ?? 'circle') === 'icon-circle' ? 28 : 14)}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { size: Number(e.target.value) || 14 })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Color interior
-                    <input
-                      type="color"
-                      value={layerStyle.fillColor ?? '#d4335b'}
-                      onChange={(e) => onLayerStyleChange?.(layer.id, { fillColor: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Opacitat interior
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerStyle.fillOpacity ?? 0.9}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Color contorn
-                    <input
-                      type="color"
-                      value={layerStyle.strokeColor ?? '#d4335b'}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Gruix contorn
-                    <input
-                      type="number" min="0" max="12"
-                      value={layerStyle.strokeWidth ?? 2}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Opacitat contorn
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerStyle.strokeOpacity ?? 1}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                </>
-              ) : null}
-
-              {layer.geometryType === 'line' ? (
-                <>
-                  <label>
-                    Color
-                    <input
-                      type="color"
-                      value={layerStyle.color ?? '#ea8b1f'}
-                      onChange={(e) => onLayerStyleChange?.(layer.id, { color: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Gruix
-                    <input
-                      type="number" min="1" max="20"
-                      value={layerStyle.width ?? 3}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { width: Number(e.target.value) || 1 })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Opacitat
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerStyle.opacity ?? 1}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { opacity: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Tipus de línia
-                    <select
-                      value={layerStyle.dashStyle ?? 'solid'}
-                      onChange={(e) => onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })}
-                    >
-                      <option value="solid">Solid</option>
-                      <option value="dashed">Dashed</option>
-                      <option value="dotted">Dotted</option>
-                    </select>
-                  </label>
-                </>
-              ) : null}
-
-              {layer.geometryType === 'polygon' ? (
-                <>
-                  <label>
-                    Color vora
-                    <input
-                      type="color"
-                      value={layerStyle.strokeColor ?? '#2f7de1'}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Gruix vora
-                    <input
-                      type="number" min="0" max="20"
-                      value={layerStyle.strokeWidth ?? 2}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Opacitat vora
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerStyle.strokeOpacity ?? 1}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Color interior
-                    <input
-                      type="color"
-                      value={layerStyle.fillColor ?? '#2f7de1'}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Opacitat interior
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerStyle.fillOpacity ?? 0.18}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Tipus de vora
-                    <select
-                      value={layerStyle.dashStyle ?? 'solid'}
-                      onChange={(e) =>
-                        onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
-                      }
-                    >
-                      <option value="solid">Solid</option>
-                      <option value="dashed">Dashed</option>
-                      <option value="dotted">Dotted</option>
-                    </select>
-                  </label>
-                </>
-              ) : null}
-            </div>
-          )}
-        </SecBlock>
-
-        {/* ── Llegenda (capa simple) ──────────────────────────────── */}
-        {layer.styleMode !== 'categorical' ? (
-          <SecBlock id="llegenda-capa" title="Llegenda" collapsed={isCollapsed('llegenda-capa')} onToggle={toggle}>
-            <label>
-              Nom en llegenda
-              <input
-                type="text"
-                value={layer.legend?.title ?? ''}
-                onChange={(e) => onLayerLegendChange?.(layer.id, { title: e.target.value })}
-                placeholder={layer.name}
-              />
-            </label>
-          </SecBlock>
-        ) : null}
-
-        {/* ── Màscara ────────────────────────────────────────────── */}
-        {layer.geometryType === 'polygon' ? (
-          <SecBlock id="mascara" title="Màscara exterior" collapsed={isCollapsed('mascara')} onToggle={toggle}>
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={focusMask?.layerIds?.includes(layer.id) ?? false}
-                onChange={(e) => onToggleLayerInMask?.(layer.id, e.target.checked)}
-              />
-              <span>Inclou en la màscara</span>
-            </label>
-            {focusMask?.layerIds?.length > 0 ? (
-              <>
-                <label>
-                  Opacitat
-                  <input
-                    type="range" min={0.05} max={0.95} step={0.05}
-                    value={focusMask.opacity ?? 0.7}
-                    onChange={(e) => onMaskOpacityChange?.(Number(e.target.value))}
-                  />
-                </label>
-                <label>
-                  Color de la màscara
-                  <input
-                    type="color"
-                    value={focusMask.color ?? '#ffffff'}
-                    onChange={(e) => onMaskColorChange?.(e.target.value)}
-                  />
-                </label>
-              </>
-            ) : null}
-          </SecBlock>
-        ) : null}
-
-        {/* ── Filtres POI ────────────────────────────────────────── */}
-        {layer.poiConfig != null && (
-          <SecBlock id="poifilter" title="Filtres de punts d'interès" collapsed={isCollapsed('poifilter')} onToggle={toggle}>
-            {/* Display mode selector */}
-            <div className="poi-display-mode-row">
-              <span className="poi-display-mode-label">Visualitzar punts d'interès per</span>
-              <select
-                className="poi-display-mode-select"
-                value={layer.poiConfig.displayMode ?? 'category'}
-                onChange={(e) => onPoiDisplayModeChange?.(layer.id, e.target.value)}
-              >
-                <option value="subcategory">Subcategoria</option>
-                <option value="category">Categoria</option>
-              </select>
-            </div>
-            {/* Migration notice for old layers without displayMode */}
-            {!layer.poiConfig.displayMode && (
-              <div className="poi-migrate-notice">
-                <p>Capa de punts d'interès antiga — els colors i la llegenda mostren categories principals.</p>
-                <button
-                  type="button"
-                  className="poi-migrate-btn"
-                  onClick={() => onPoiDisplayModeChange?.(layer.id, 'subcategory')}
-                >
-                  Usar subcategories de punts d'interès
-                </button>
-              </div>
-            )}
-            {/* Quick symbol actions */}
-            <div className="poi-symbol-actions">
-              <span className="poi-symbol-actions-label">Simbologia ràpida</span>
-              <div className="poi-symbol-actions-btns">
-                <button
-                  type="button"
-                  className="poi-symbol-btn"
-                  title="Cercles de color amb icones vectorials professionals"
-                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'tabler')}
-                >
-                  Icones vectorials
-                </button>
-                <button
-                  type="button"
-                  className="poi-symbol-btn"
-                  title="Icones emoji de les categories"
-                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'emoji')}
-                >
-                  Emojis
-                </button>
-                <button
-                  type="button"
-                  className="poi-symbol-btn"
-                  title="Cercle de color simple sense icona"
-                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'circle')}
-                >
-                  Cercle
-                </button>
-              </div>
-            </div>
-
-            <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
-          </SecBlock>
+          </div>
         )}
 
-        {/* ── Accions ────────────────────────────────────────────── */}
-        <SecBlock id="accions" title="Accions" collapsed={isCollapsed('accions')} onToggle={toggle}>
-          <div className="layer-props-actions">
-            <div className="layer-props-actions-row">
-              <button
-                type="button"
-                disabled={layerIndex === 0}
-                onClick={() => onMoveLayerUp?.(layer.id)}
-              >
-                ↑ Pujar
-              </button>
-              <button
-                type="button"
-                disabled={layerIndex === totalLayers - 1}
-                onClick={() => onMoveLayerDown?.(layer.id)}
-              >
-                ↓ Baixar
+        {/* ═══ ESTIL ════════════════════════════════════════════════════════ */}
+        {activeTab === 'estil' && (
+          <div className="insp-tab-content">
+            {layer.type === 'source' ? (
+              <label>
+                Mode d'estil
+                <select
+                  value={layer.styleMode ?? 'single'}
+                  onChange={(e) => onLayerStyleModeChange?.(layer.id, e.target.value)}
+                >
+                  <option value="single">Estil únic</option>
+                  <option value="categorical">Per atribut</option>
+                </select>
+              </label>
+            ) : null}
+
+            {layer.styleMode === 'categorical' ? (
+              <CategoricalStyleEditor
+                layer={layer}
+                onLayerCategoricalChange={onLayerCategoricalChange}
+                onLayerLegendChange={onLayerLegendChange}
+                onFeatureOverrideChange={onFeatureOverrideChange}
+                projectPalettes={projectPalettes}
+                onManagePalettes={onManagePalettes}
+                activeSection="estil"
+              />
+            ) : (
+              <div className="insp-style-editor">
+                {layer.geometryType === 'point' ? (
+                  <>
+                    <InspectorField label="Marcador">
+                      <select
+                        value={layerStyle.markerType ?? 'circle'}
+                        onChange={(e) => {
+                          const nextType = e.target.value
+                          if (nextType === 'icon-circle') {
+                            onLayerStyleChange?.(layer.id, {
+                              markerType: 'icon-circle',
+                              size: 40,
+                              strokeColor: '#ffffff',
+                              strokeWidth: 3,
+                              iconColor: '#ffffff',
+                            })
+                          } else {
+                            onLayerStyleChange?.(layer.id, { markerType: nextType })
+                          }
+                        }}
+                      >
+                        <option value="circle">Cercle</option>
+                        <option value="icon-circle">Cercle amb icona</option>
+                      </select>
+                    </InspectorField>
+
+                    {(layerStyle.markerType ?? 'circle') === 'icon-circle' ? (
+                      <>
+                        <InspectorDivider />
+                        <p className="icon-picker-label">Icona</p>
+                        <IconPicker
+                          selectedIconId={layerStyle.icon ?? null}
+                          onSelect={(iconId) =>
+                            onLayerStyleChange?.(layer.id, { icon: iconId, iconSet: 'fa' })
+                          }
+                        />
+                        <InspectorField label="Color icona">
+                          <input
+                            type="color"
+                            value={layerStyle.iconColor ?? '#ffffff'}
+                            onChange={(e) =>
+                              onLayerStyleChange?.(layer.id, { iconColor: e.target.value })
+                            }
+                          />
+                        </InspectorField>
+                        <InspectorDivider />
+                      </>
+                    ) : null}
+
+                    <InspectorField label="Mida">
+                      <input
+                        type="number" min="6" max="60"
+                        value={resolvePointSize(layerStyle, (layerStyle.markerType ?? 'circle') === 'icon-circle' ? 28 : 14)}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { size: Number(e.target.value) || 14 })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Color interior">
+                      <input
+                        type="color"
+                        value={layerStyle.fillColor ?? '#d4335b'}
+                        onChange={(e) => onLayerStyleChange?.(layer.id, { fillColor: e.target.value })}
+                      />
+                    </InspectorField>
+                    <InspectorField label="Opacitat">
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={layerStyle.fillOpacity ?? 0.9}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Color contorn">
+                      <input
+                        type="color"
+                        value={layerStyle.strokeColor ?? '#d4335b'}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Gruix contorn">
+                      <input
+                        type="number" min="0" max="12"
+                        value={layerStyle.strokeWidth ?? 2}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </InspectorField>
+                  </>
+                ) : null}
+
+                {layer.geometryType === 'line' ? (
+                  <>
+                    <InspectorField label="Color">
+                      <input
+                        type="color"
+                        value={layerStyle.color ?? '#ea8b1f'}
+                        onChange={(e) => onLayerStyleChange?.(layer.id, { color: e.target.value })}
+                      />
+                    </InspectorField>
+                    <InspectorField label="Gruix">
+                      <input
+                        type="number" min="1" max="20"
+                        value={layerStyle.width ?? 3}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { width: Number(e.target.value) || 1 })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Opacitat">
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={layerStyle.opacity ?? 1}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { opacity: Number(e.target.value) })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Tipus línia">
+                      <select
+                        value={layerStyle.dashStyle ?? 'solid'}
+                        onChange={(e) => onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })}
+                      >
+                        <option value="solid">Contínua</option>
+                        <option value="dashed">Discontinua</option>
+                        <option value="dotted">Puntejada</option>
+                      </select>
+                    </InspectorField>
+                  </>
+                ) : null}
+
+                {layer.geometryType === 'polygon' ? (
+                  <>
+                    <InspectorField label="Color vora">
+                      <input
+                        type="color"
+                        value={layerStyle.strokeColor ?? '#2f7de1'}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { strokeColor: e.target.value })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Gruix vora">
+                      <input
+                        type="number" min="0" max="20"
+                        value={layerStyle.strokeWidth ?? 2}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { strokeWidth: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Opacitat vora">
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={layerStyle.strokeOpacity ?? 1}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { strokeOpacity: Number(e.target.value) })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Color interior">
+                      <input
+                        type="color"
+                        value={layerStyle.fillColor ?? '#2f7de1'}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { fillColor: e.target.value })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Opacitat">
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={layerStyle.fillOpacity ?? 0.18}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { fillOpacity: Number(e.target.value) })
+                        }
+                      />
+                    </InspectorField>
+                    <InspectorField label="Tipus vora">
+                      <select
+                        value={layerStyle.dashStyle ?? 'solid'}
+                        onChange={(e) =>
+                          onLayerStyleChange?.(layer.id, { dashStyle: e.target.value })
+                        }
+                      >
+                        <option value="solid">Contínua</option>
+                        <option value="dashed">Discontinua</option>
+                        <option value="dotted">Puntejada</option>
+                      </select>
+                    </InspectorField>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {/* Llegenda per a estil únic */}
+            {layer.styleMode !== 'categorical' ? (
+              <SecBlock id="llegenda-capa" title="Llegenda" collapsed={isCollapsed('llegenda-capa')} onToggle={toggle}>
+                <label>
+                  Nom en llegenda
+                  <input
+                    type="text"
+                    value={layer.legend?.title ?? ''}
+                    onChange={(e) => onLayerLegendChange?.(layer.id, { title: e.target.value })}
+                    placeholder={layer.name}
+                  />
+                </label>
+              </SecBlock>
+            ) : null}
+
+            {/* Màscara per a polígons */}
+            {layer.geometryType === 'polygon' ? (
+              <SecBlock id="mascara" title="Màscara exterior" collapsed={isCollapsed('mascara')} onToggle={toggle}>
+                <label className="layer-toggle">
+                  <input
+                    type="checkbox"
+                    checked={focusMask?.layerIds?.includes(layer.id) ?? false}
+                    onChange={(e) => onToggleLayerInMask?.(layer.id, e.target.checked)}
+                  />
+                  <span>Inclou en la màscara</span>
+                </label>
+                {focusMask?.layerIds?.length > 0 ? (
+                  <>
+                    <label>
+                      Opacitat
+                      <input
+                        type="range" min={0.05} max={0.95} step={0.05}
+                        value={focusMask.opacity ?? 0.7}
+                        onChange={(e) => onMaskOpacityChange?.(Number(e.target.value))}
+                      />
+                    </label>
+                    <label>
+                      Color de la màscara
+                      <input
+                        type="color"
+                        value={focusMask.color ?? '#ffffff'}
+                        onChange={(e) => onMaskColorChange?.(e.target.value)}
+                      />
+                    </label>
+                  </>
+                ) : null}
+              </SecBlock>
+            ) : null}
+          </div>
+        )}
+
+        {/* ═══ DADES ════════════════════════════════════════════════════════ */}
+        {activeTab === 'dades' && (
+          <div className="insp-tab-content">
+            {layer.styleMode === 'categorical' ? (
+              <CategoricalStyleEditor
+                layer={layer}
+                onLayerCategoricalChange={onLayerCategoricalChange}
+                onLayerLegendChange={onLayerLegendChange}
+                onFeatureOverrideChange={onFeatureOverrideChange}
+                projectPalettes={projectPalettes}
+                onManagePalettes={onManagePalettes}
+                activeSection="dades"
+              />
+            ) : layer.type === 'source' ? (
+              <div className="insp-source-info">
+                <div className="catdiag-info">
+                  <span>Dataset: <strong>{layer.datasetId ?? '—'}</strong></span>
+                  {(layer.meta?.fields ?? []).length > 0 ? (
+                    <span className="catdiag-fields-hint">
+                      {layer.meta.fields.length} camps: {layer.meta.fields.slice(0, 8).join(', ')}
+                      {layer.meta.fields.length > 8 ? ` +${layer.meta.fields.length - 8} més` : ''}
+                    </span>
+                  ) : (
+                    <span className="catdiag-warn">⚠ Sense camps disponibles</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <InspectorEmptyState>Capa editada manualment. Sense dades d'atribut estructurades.</InspectorEmptyState>
+            )}
+
+            <div className="insp-table-placeholder">
+              <button type="button" disabled className="ui-btn ui-btn-secondary ui-btn-full">
+                Obrir taula de dades (properament…)
               </button>
             </div>
-            <button type="button" onClick={() => onExportLayerGeoJSON?.(layer.id)}>
-              Exportar GeoJSON
-            </button>
-            <button type="button" onClick={() => onExportLayerSVG?.(layer.id)}>
-              Exportar SVG (prova)
-            </button>
-            {layer.geometryType === 'point' ? (
-              <button type="button" onClick={() => onExportLayerHybrid?.(layer.id)}>
-                Exportar PNG + SVG (prova)
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn-danger-layer"
-              onClick={() => onDeleteLayer?.(layer.id)}
-            >
-              Eliminar capa
-            </button>
           </div>
-        </SecBlock>
+        )}
+
+        {/* ═══ FILTRES ══════════════════════════════════════════════════════ */}
+        {activeTab === 'filtres' && (
+          <div className="insp-tab-content">
+            {layer.type === 'source' ? (
+              <InspectorToolbar>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary"
+                  onClick={() => onOpenFilterModal?.(layer.id)}
+                >
+                  Filtrar dades…
+                </button>
+                {hasActiveFilters(layer.filters) && (
+                  <InspectorBadge variant="info">Filtrada</InspectorBadge>
+                )}
+              </InspectorToolbar>
+            ) : null}
+
+            {layer.poiConfig != null ? (
+              <div className="poi-filters-section">
+                <div className="poi-display-mode-row">
+                  <span className="poi-display-mode-label">Visualitzar per</span>
+                  <select
+                    className="poi-display-mode-select"
+                    value={layer.poiConfig.displayMode ?? 'category'}
+                    onChange={(e) => onPoiDisplayModeChange?.(layer.id, e.target.value)}
+                  >
+                    <option value="subcategory">Subcategoria</option>
+                    <option value="category">Categoria</option>
+                  </select>
+                </div>
+                {!layer.poiConfig.displayMode && (
+                  <div className="poi-migrate-notice">
+                    <p>Capa antiga — actualitza a subcategories per millorar colors i llegenda.</p>
+                    <button
+                      type="button"
+                      className="poi-migrate-btn"
+                      onClick={() => onPoiDisplayModeChange?.(layer.id, 'subcategory')}
+                    >
+                      Usar subcategories
+                    </button>
+                  </div>
+                )}
+                <div className="poi-symbol-actions">
+                  <span className="poi-symbol-actions-label">Simbologia ràpida</span>
+                  <div className="poi-symbol-actions-btns">
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Cercles de color amb icones vectorials professionals"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'tabler')}
+                    >
+                      Icones vectorials
+                    </button>
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Icones emoji de les categories"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'emoji')}
+                    >
+                      Emojis
+                    </button>
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Cercle de color simple sense icona"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'circle')}
+                    >
+                      Cercle
+                    </button>
+                  </div>
+                </div>
+                <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
+              </div>
+            ) : null}
+
+            {layer.type !== 'source' && layer.poiConfig == null ? (
+              <InspectorEmptyState>Cap filtre disponible per a aquesta capa.</InspectorEmptyState>
+            ) : null}
+          </div>
+        )}
+
+        {/* ═══ ANÀLISI ══════════════════════════════════════════════════════ */}
+        {activeTab === 'analisi' && (
+          <div className="insp-tab-content insp-analisi-placeholder">
+            <p className="insp-analisi-text">
+              Pròximament: interseccions, superfícies afectades, proximitats, isòcrones, estadístiques
+            </p>
+          </div>
+        )}
+
       </div>
     </aside>
   )
