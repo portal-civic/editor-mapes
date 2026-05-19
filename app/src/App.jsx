@@ -82,6 +82,7 @@ import SpatialOverlayModal from './components/SpatialOverlayModal'
 import OsmPoiModal from './components/OsmPoiModal'
 import { buildPoiCategoricalConfig, applyPoiMarkerStyleToCategories } from './modules/osm/poiCategoryStyle'
 import LayerFilterModal from './components/LayerFilterModal'
+import DataTablePanel from './components/DataTablePanel'
 import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
@@ -152,6 +153,7 @@ function App() {
   const [showSpatialOverlay, setShowSpatialOverlay] = useState(false)
   const [showOsmPoiModal, setShowOsmPoiModal] = useState(false)
   const [filterModalLayerId, setFilterModalLayerId] = useState(null)
+  const [dataTableLayerId, setDataTableLayerId] = useState(null)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
   // Resizable right sidebar — width persisted in localStorage
@@ -2559,6 +2561,7 @@ function App() {
                 onPoiDisplayModeChange={handlePoiDisplayModeChange}
                 onPoiApplyMarkerStyle={handlePoiApplyMarkerStyle}
                 onOpenFilterModal={setFilterModalLayerId}
+                onOpenDataTable={setDataTableLayerId}
                 panelExpanded={sidebarIsExpanded}
                 onTogglePanelExpand={() => setSidebarPreset(sidebarIsExpanded ? 'default' : 'work')}
               />
@@ -2578,6 +2581,16 @@ function App() {
           )}
         </div>
       </main>
+
+      {dataTableLayerId != null && (() => {
+        const dtLayer = layers.find((l) => l.id === dataTableLayerId)
+        return dtLayer ? (
+          <DataTablePanel
+            layer={dtLayer}
+            onClose={() => setDataTableLayerId(null)}
+          />
+        ) : null
+      })()}
     </div>
   )
 }

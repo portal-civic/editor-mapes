@@ -787,6 +787,7 @@ function LayerInspector({
   onPoiDisplayModeChange,
   onPoiApplyMarkerStyle,
   onOpenFilterModal,
+  onOpenDataTable,
   panelExpanded = false,
   onTogglePanelExpand,
 }) {
@@ -1260,8 +1261,12 @@ function LayerInspector({
             )}
 
             <div className="insp-table-placeholder">
-              <button type="button" disabled className="ui-btn ui-btn-secondary ui-btn-full">
-                Obrir taula de dades (properament…)
+              <button
+                type="button"
+                className="ui-btn ui-btn-secondary ui-btn-full"
+                onClick={() => onOpenDataTable?.(layer.id)}
+              >
+                Obrir taula de dades…
               </button>
             </div>
           </div>

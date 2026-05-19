@@ -76,6 +76,19 @@ body {
   --radius:     6px;
   --radius-md:  8px;
   --radius-lg: 10px;
+
+  /* Shorthand aliases */
+  --surface-0:    var(--surface-base);
+  --surface-1:    var(--surface-raised);
+  --surface-2:    var(--surface-subtle);
+  --text-0:       var(--text-primary);
+  --text-1:       var(--text-secondary);
+  --text-2:       var(--text-tertiary);
+  --text-muted:   var(--text-tertiary);
+  --accent-idle:  var(--accent-mid);
+  --accent-active: var(--accent);
+  --border-0:     var(--border-subtle);
+  --border-1:     var(--border-default);
 }
 
 button,
@@ -7365,4 +7378,226 @@ button.primary {
   .sidebar-resize-handle {
     display: none;
   }
+}
+
+/* ── Data Table Panel ──────────────────────────────────────────────────────── */
+
+.dt-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-base);
+  border-top: 2px solid var(--border-strong);
+  box-shadow: 0 -4px 20px rgba(15, 34, 56, 0.16);
+}
+
+.dt-resize-handle {
+  height: 6px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  background: transparent;
+  border-bottom: 1px solid var(--border-default);
+  transition: background 0.12s;
+}
+
+.dt-resize-handle:hover {
+  background: var(--accent-idle);
+  opacity: 0.35;
+}
+
+.dt-toolbar {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-1);
+}
+
+.dt-layer-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  flex-shrink: 0;
+}
+
+.dt-count {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dt-search {
+  flex: 1;
+  min-width: 120px;
+  max-width: 320px;
+  height: 26px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  font-size: 0.8rem;
+  background: var(--surface-base);
+  color: var(--text-primary);
+}
+
+.dt-search:focus {
+  outline: none;
+  border-color: var(--accent-idle);
+}
+
+.dt-close-btn {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.dt-close-btn:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.dt-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* Scroll area: single container for both X and Y scroll */
+.dt-scroll-area {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Inner width-determining wrapper */
+.dt-inner {
+  min-width: max-content;
+  display: block;
+}
+
+/* Sticky header */
+.dt-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-1);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.dt-row {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.08s;
+}
+
+.dt-row--head {
+  height: 30px;
+}
+
+.dt-row:not(.dt-row--head):hover {
+  background: var(--surface-1);
+}
+
+/* Common cell */
+.dt-cell {
+  padding: 0 8px;
+  font-size: 0.77rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.dt-cell--idx {
+  width: 48px;
+  color: var(--text-muted);
+  text-align: right;
+  border-right: 1px solid var(--border-default);
+  font-size: 0.7rem;
+}
+
+.dt-cell--col {
+  min-width: 120px;
+  max-width: 260px;
+  width: 160px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+/* Header cell (clickable div) */
+.dt-hcell {
+  min-width: 120px;
+  max-width: 260px;
+  width: 160px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-right: 1px solid var(--border-default);
+  user-select: none;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dt-hcell:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.dt-hcell--sorted {
+  color: var(--accent-idle);
+}
+
+.dt-hcell--sorted:hover {
+  color: var(--accent-hover);
+}
+
+.dt-hcell-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-sort-icon {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  opacity: 0.8;
+}
+
+.dt-rows-wrap {
+  display: block;
 }
