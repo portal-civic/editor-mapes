@@ -1,3 +1,21 @@
+# Dependencies
+app/node_modules
+node_modules
+
+# Build output
+app/dist
+dist
+dist-ssr
+
+# Environment variables
+.env
+.env.local
+.env.production
+*.local
+
+# macOS
+.DS_Store
+
 # Logs
 logs
 *.log
@@ -7,18 +25,43 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# VS Code
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains
 .idea
-.DS_Store
+
+# Windows
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Cache
+.cache
+.eslintcache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Optional local libraries / heavy data
+library-data/
+data/
+tmp/
+
+# Python
+__pycache__/
+*.pyc
+
+# GIS temporary files
+*.gpkg-wal
+*.gpkg-shm
+
+# Large exports
+exports/
+screenshots/
