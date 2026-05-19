@@ -11,6 +11,7 @@ import ShapefileLayerSelectDialog from './components/ShapefileLayerSelectDialog'
 import GpkgLayerSelectDialog from './components/GpkgLayerSelectDialog'
 import PaletteManagerDialog from './components/PaletteManagerDialog'
 import useMapExport from './hooks/useMapExport'
+import { useResizableSidebar } from './hooks/useResizableSidebar'
 import {
   mockLayers,
   DEFAULT_MAP_CENTER,
@@ -153,8 +154,15 @@ function App() {
   const [filterModalLayerId, setFilterModalLayerId] = useState(null)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
-  // rightPanelExpanded: local UI state — not persisted to project
-  const [rightPanelExpanded, setRightPanelExpanded] = useState(false)
+  // Resizable right sidebar — width persisted in localStorage
+  const {
+    width: sidebarWidth,
+    isDragging: sidebarIsDragging,
+    isCompact: sidebarIsCompact,
+    isExpanded: sidebarIsExpanded,
+    setPreset: setSidebarPreset,
+    onHandleMouseDown: onSidebarHandleDown,
+  } = useResizableSidebar()
   // mapComposition: aspect-ratio constraint for the map canvas area
   const [mapComposition, setMapComposition] = useState({ mode: 'auto' })
   // busyState: global progress indicator for heavy async operations
@@ -2307,7 +2315,10 @@ function App() {
         onOpenOsmPoi={() => setShowOsmPoiModal(true)}
       />
 
-      <main className={`workspace${rightPanelExpanded ? ' workspace--wide-panel' : ''}`}>
+      <main
+        className={`workspace${sidebarIsDragging ? ' workspace--resizing' : ''}`}
+        style={{ '--rp-width': `${sidebarWidth}px` }}
+      >
         <LayersPanel
           layers={layers}
           groups={groups}
@@ -2454,7 +2465,15 @@ function App() {
             )
           })()}
         </section>
-        <div className="right-panel-slot">
+        <div className={`right-panel-slot${sidebarIsCompact ? ' right-panel-slot--compact' : ''}${sidebarIsDragging ? ' right-panel-slot--dragging' : ''}`}>
+          {/* Drag-to-resize handle on the left edge */}
+          <div
+            className={`sidebar-resize-handle${sidebarIsDragging ? ' sidebar-resize-handle--active' : ''}`}
+            onMouseDown={onSidebarHandleDown}
+            title="Arrossega per redimensionar"
+            aria-hidden="true"
+          />
+
           <div className="rp-tab-bar">
             <button
               type="button"
@@ -2470,6 +2489,26 @@ function App() {
             >
               Llegenda
             </button>
+            <div className="rp-sidebar-presets">
+              <button
+                type="button"
+                className={`rp-preset-btn${!sidebarIsExpanded ? ' rp-preset-btn--active' : ''}`}
+                onClick={() => setSidebarPreset('default')}
+                title="Amplada normal (360px)"
+                aria-label="Reduir panell"
+              >
+                ⟨
+              </button>
+              <button
+                type="button"
+                className={`rp-preset-btn${sidebarIsExpanded ? ' rp-preset-btn--active' : ''}`}
+                onClick={() => setSidebarPreset('work')}
+                title="Amplada de treball (500px)"
+                aria-label="Ampliar panell"
+              >
+                ⟩
+              </button>
+            </div>
           </div>
 
           {rightPanelTab === 'layer' ? (
@@ -2520,8 +2559,8 @@ function App() {
                 onPoiDisplayModeChange={handlePoiDisplayModeChange}
                 onPoiApplyMarkerStyle={handlePoiApplyMarkerStyle}
                 onOpenFilterModal={setFilterModalLayerId}
-                panelExpanded={rightPanelExpanded}
-                onTogglePanelExpand={() => setRightPanelExpanded((v) => !v)}
+                panelExpanded={sidebarIsExpanded}
+                onTogglePanelExpand={() => setSidebarPreset(sidebarIsExpanded ? 'default' : 'work')}
               />
             ) : (
               <aside className="panel panel-right inspector-empty">
