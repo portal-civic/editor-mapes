@@ -3,6 +3,7 @@ import IconPicker from './IconPicker'
 import CategoryEditorModal from './CategoryEditorModal'
 import PoiFilterPanel from './PoiFilterPanel'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
+import { hasActiveFilters } from '../modules/filters/layerFilters'
 import { normalizeCategory, normalizeCategoricalStyle } from '../modules/sources/categoricalStyle'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
 import { suggestGvaPresets, GVA_GROUPS } from '../modules/presets/gva'
@@ -762,6 +763,9 @@ function LayerInspector({
   onMaskOpacityChange,
   onMaskColorChange,
   onPoiVisibilityChange,
+  onPoiDisplayModeChange,
+  onPoiApplyMarkerStyle,
+  onOpenFilterModal,
   panelExpanded = false,
   onTogglePanelExpand,
 }) {
@@ -837,6 +841,20 @@ function LayerInspector({
           <p className="layer-props-meta">
             {geomLabel} · {featureCount} {featureCount === 1 ? 'element' : 'elements'}
           </p>
+          {layer.type === 'source' ? (
+            <div className="lf-inspector-row">
+              <button
+                type="button"
+                className="lf-filter-open-btn"
+                onClick={() => onOpenFilterModal?.(layer.id)}
+              >
+                Filtrar dades…
+              </button>
+              {hasActiveFilters(layer.filters) && (
+                <span className="lf-filter-badge">FILTRADA</span>
+              )}
+            </div>
+          ) : null}
           {groups.length > 0 ? (
             <label className="layer-group-select-label">
               Grup
@@ -1154,7 +1172,63 @@ function LayerInspector({
 
         {/* ── Filtres POI ────────────────────────────────────────── */}
         {layer.poiConfig != null && (
-          <SecBlock id="poifilter" title="Filtres POI" collapsed={isCollapsed('poifilter')} onToggle={toggle}>
+          <SecBlock id="poifilter" title="Filtres de punts d'interès" collapsed={isCollapsed('poifilter')} onToggle={toggle}>
+            {/* Display mode selector */}
+            <div className="poi-display-mode-row">
+              <span className="poi-display-mode-label">Visualitzar punts d'interès per</span>
+              <select
+                className="poi-display-mode-select"
+                value={layer.poiConfig.displayMode ?? 'category'}
+                onChange={(e) => onPoiDisplayModeChange?.(layer.id, e.target.value)}
+              >
+                <option value="subcategory">Subcategoria</option>
+                <option value="category">Categoria</option>
+              </select>
+            </div>
+            {/* Migration notice for old layers without displayMode */}
+            {!layer.poiConfig.displayMode && (
+              <div className="poi-migrate-notice">
+                <p>Capa de punts d'interès antiga — els colors i la llegenda mostren categories principals.</p>
+                <button
+                  type="button"
+                  className="poi-migrate-btn"
+                  onClick={() => onPoiDisplayModeChange?.(layer.id, 'subcategory')}
+                >
+                  Usar subcategories de punts d'interès
+                </button>
+              </div>
+            )}
+            {/* Quick symbol actions */}
+            <div className="poi-symbol-actions">
+              <span className="poi-symbol-actions-label">Simbologia ràpida</span>
+              <div className="poi-symbol-actions-btns">
+                <button
+                  type="button"
+                  className="poi-symbol-btn"
+                  title="Cercles de color amb icones vectorials professionals"
+                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'tabler')}
+                >
+                  Icones vectorials
+                </button>
+                <button
+                  type="button"
+                  className="poi-symbol-btn"
+                  title="Icones emoji de les categories"
+                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'emoji')}
+                >
+                  Emojis
+                </button>
+                <button
+                  type="button"
+                  className="poi-symbol-btn"
+                  title="Cercle de color simple sense icona"
+                  onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'circle')}
+                >
+                  Cercle
+                </button>
+              </div>
+            </div>
+
             <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
           </SecBlock>
         )}

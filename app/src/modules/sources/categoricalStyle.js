@@ -13,6 +13,8 @@ export function normalizeCategory(cat, index) {
     color,
     fillColor: cat.fillColor ?? null,
     strokeColor: cat.strokeColor ?? null,
+    icon: cat.icon ?? null,
+    markerStyle: cat.markerStyle ?? null,
     visible: cat.visible !== false,
     legendVisible: cat.legendVisible !== false,
     legendOrder: cat.legendOrder ?? index,

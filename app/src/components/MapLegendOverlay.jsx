@@ -1,4 +1,34 @@
-function Swatch({ geometryType, style = {} }) {
+import { resolveTablerIcon } from '../icons/tablerIconResolver'
+
+function Swatch({ geometryType, style = {}, icon, markerStyle }) {
+  // Tabler vector icon in coloured circle
+  if (markerStyle?.iconSet === 'tabler' && markerStyle.icon && geometryType === 'point') {
+    const TablerIcon = resolveTablerIcon(markerStyle.icon)
+    const bg = markerStyle.fillColor ?? style.fillColor ?? '#888'
+    const ic = markerStyle.iconColor ?? '#fff'
+    return (
+      <span
+        className="map-legend-swatch map-legend-swatch--poi"
+        style={{ backgroundColor: bg }}
+        aria-hidden="true"
+      >
+        {TablerIcon ? <TablerIcon size={10} color={ic} strokeWidth={2.5} /> : null}
+      </span>
+    )
+  }
+  // Emoji icon
+  const emojiIcon = (markerStyle?.iconSet === 'emoji' ? markerStyle.icon : null) ?? icon
+  if (emojiIcon && geometryType === 'point') {
+    return (
+      <span
+        className="map-legend-swatch map-legend-swatch--poi"
+        style={{ backgroundColor: style.fillColor || '#888' }}
+        aria-hidden="true"
+      >
+        {emojiIcon}
+      </span>
+    )
+  }
   if (geometryType === 'line') {
     return (
       <span
@@ -64,7 +94,7 @@ export default function MapLegendOverlay({ entries = [], layout = {} }) {
             )}
             {entry.rows.map((row, ri) => (
               <div key={ri} className="map-legend-row">
-                <Swatch geometryType={row.geometryType} style={row.style} />
+                <Swatch geometryType={row.geometryType} style={row.style} icon={row.icon} markerStyle={row.markerStyle} />
                 <span className="map-legend-label">{row.label}</span>
               </div>
             ))}

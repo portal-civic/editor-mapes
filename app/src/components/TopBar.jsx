@@ -350,7 +350,7 @@ function TopBar({
                 className="topbar-dropdown-item"
                 onClick={() => { onOpenOsmPoi?.(); setShowToolsMenu(false) }}
               >
-                Punts d'interès OSM
+                Punts d'interès (OSM)
               </button>
             </div>
           ) : null}

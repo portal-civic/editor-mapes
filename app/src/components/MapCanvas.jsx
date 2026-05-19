@@ -21,6 +21,7 @@ import { resolveFaIcon } from '../icons/faIconResolver'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { filterByViewportBbox } from '../modules/sources/bboxFilter'
 import { isPoiFeatureVisible } from '../modules/osm/poiVisibility'
+import { featurePassesFilters } from '../modules/filters/layerFilters'
 import { leafletStyleForCategory } from '../modules/sources/categoricalStyle'
 import { getFeatureKey } from '../modules/sources/featureKey'
 import MapLegendOverlay from './MapLegendOverlay'
@@ -281,12 +282,17 @@ function getOuterRings(latlngs) {
   return [latlngs]
 }
 
-function getLayerStyleSignature(layer) {
+function getLayerRenderSignature(layer) {
+  // ── Style ──
   let base
   if (layer.styleMode === 'categorical' && layer.categorical?.field) {
     const { field, categories = [], categoricalStyle } = layer.categorical
     const colorStr = categories
-      .map((c) => `${c.value}:${c.color ?? c.style?.color ?? ''}:${c.visible !== false ? 1 : 0}`)
+      .map((c) => {
+        const ms = c.markerStyle
+        const msStr = ms ? `${ms.iconSet ?? ''}:${ms.icon ?? ''}:${ms.iconColor ?? ''}:${ms.size ?? ''}` : ''
+        return `${c.value}:${c.color ?? ''}:${c.icon ?? ''}:${msStr}:${c.visible !== false ? 1 : 0}`
+      })
       .join('|')
     const cs = categoricalStyle ?? {}
     const styleStr = `${cs.fillOpacity}:${cs.strokeOpacity}:${cs.strokeWidth}:${cs.dashStyle}:${cs.strokeMode}:${cs.fixedStrokeColor}`
@@ -301,13 +307,37 @@ function getLayerStyleSignature(layer) {
       base = `s:${s.fillColor}:${s.fillOpacity}:${s.strokeColor}:${s.strokeWidth}:${s.size}`
     }
   }
+
+  // ── Feature overrides ──
   const ovEntries = Object.entries(layer.featureOverrides ?? {})
   if (ovEntries.length > 0) {
     const ovStr = ovEntries
       .map(([k, v]) => `${k}:${v?.fillColor ?? ''}:${v?.fillOpacity ?? ''}:${v?.strokeColor ?? ''}:${v?.strokeOpacity ?? ''}:${v?.strokeWidth ?? ''}`)
       .join('|')
-    return `${base}:ov:${ovStr}`
+    base = `${base}:ov:${ovStr}`
   }
+
+  // ── POI subcategory visibility ──
+  const pv = layer.poiVisibility
+  if (pv?.subcategories) {
+    const pvStr = Object.entries(pv.subcategories)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, v]) => `${k}:${v ? 1 : 0}`)
+      .join('|')
+    base = `${base}:pv:${pvStr}`
+  }
+
+  // ── Attribute filters ──
+  const f = layer.filters
+  if (f?.enabled && f.rules?.length > 0) {
+    const fStr = `${f.logic}:` + f.rules
+      .map((r) => `${r.field}${r.operator}${r.value ?? ''}${r.value2 != null ? `:${r.value2}` : ''}`)
+      .join('|')
+    base = `${base}:f:${fStr}`
+  } else if (f?.enabled === false && layer.filters != null) {
+    base = `${base}:f:off`
+  }
+
   return base
 }
 
@@ -323,6 +353,46 @@ function applyFeatureOverride(baseStyle, override, geometryType) {
   if (has(override.strokeOpacity)) merged.opacity = Number(override.strokeOpacity)
   if (has(override.strokeWidth)) merged.weight = Number(override.strokeWidth)
   return merged
+}
+
+// ─── Categorical point icon with Tabler SVG ───────────────────────────────────
+
+/**
+ * Build a Leaflet divIcon for a categorical POI point using a Tabler icon
+ * rendered inside a coloured SVG circle.  Mirrors createPointIcon() but for
+ * source-layer categorical categories (no selection ring needed).
+ */
+function makeCatTablerIcon(cat) {
+  const ms = cat.markerStyle ?? {}
+  const size    = ms.size ?? 22
+  const radius  = size / 2
+  const fill    = ms.fillColor ?? cat.color ?? '#64748b'
+  const iColor  = ms.iconColor ?? '#ffffff'
+  const stroke  = ms.strokeColor ?? fill
+  const sWidth  = ms.strokeWidth ?? 0
+  const iconId  = ms.icon ?? 'map-pin'
+
+  const pad = 2
+  const total = (radius + pad) * 2
+  const cx = radius + pad
+  const cy = radius + pad
+
+  const circleEl = `<circle cx="${cx}" cy="${cy}" r="${Math.max(radius - sWidth / 2, 1)}" fill="${fill}" stroke="${stroke}" stroke-width="${sWidth}" />`
+
+  const iSize = radius * 0.84
+  const ix = cx - iSize / 2
+  const iy = cy - iSize / 2
+  const inner = getTablerIconSvgContent(iconId, iColor)
+  const iconEl = inner
+    ? `<svg x="${ix}" y="${iy}" width="${iSize}" height="${iSize}" viewBox="0 0 24 24" fill="none" stroke="${iColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`
+    : ''
+
+  return L.divIcon({
+    className: '',
+    html: `<svg width="${total}" height="${total}" viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg">${circleEl}${iconEl}</svg>`,
+    iconSize: [total, total],
+    iconAnchor: [cx, cy],
+  })
 }
 
 // ─── Point-in-polygon (GeoJSON coordinate space: [lng, lat]) ─────────────────
@@ -386,6 +456,7 @@ function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeat
 
         for (const feature of candidates) {
           if (!isPoiFeatureVisible(feature, layer.poiVisibility)) continue
+          if (!featurePassesFilters(feature, layer.filters)) continue
           const geom = feature?.geometry
           if (!geom) continue
           const coordsList = geom.type === 'Point'
@@ -411,6 +482,7 @@ function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeat
         const allFeatures = getDatasetFeatures(layer.datasetId) ?? []
         const candidates = filterByViewportBbox(allFeatures, viewport)
         for (const feature of candidates) {
+          if (!featurePassesFilters(feature, layer.filters)) continue
           if (pointInGeoJSONFeature(pt, feature?.geometry)) {
             const key = getFeatureKey(feature)
             onSourceFeatureClick?.({ layerId: layer.id, featureKey: key, feature })
@@ -441,9 +513,9 @@ function SourceLayerRenderer({ layer, pane }) {
     const viewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
     const allFeatures = getDatasetFeatures(layer.datasetId)
     const visible = filterByViewportBbox(allFeatures, viewport)
-      .filter((f) => isPoiFeatureVisible(f, layer.poiVisibility))
+      .filter((f) => isPoiFeatureVisible(f, layer.poiVisibility) && featurePassesFilters(f, layer.filters))
     return { type: 'FeatureCollection', features: visible }
-  }, [layer.datasetId, layer.poiVisibility, moveCount, map])
+  }, [layer.datasetId, layer.poiVisibility, layer.filters, moveCount, map])
 
   const isCategorical = layer.styleMode === 'categorical' && !!layer.categorical?.field
 
@@ -500,7 +572,39 @@ function SourceLayerRenderer({ layer, pane }) {
       if (isCategorical && categoryMap) {
         const val = feature?.properties?.[layer.categorical.field]
         const key = val == null ? '__null__' : String(val)
-        const base = leafletStyleForCategory(categoryMap.get(key), 'point', catStyle)
+        const cat = categoryMap.get(key)
+
+        if (cat?.markerStyle) {
+          const ms = cat.markerStyle
+          if (ms.iconSet === 'tabler' && ms.icon) {
+            return L.marker(latlng, { icon: makeCatTablerIcon(cat) })
+          }
+          if ((ms.iconSet === 'emoji') && ms.icon) {
+            const color = ms.fillColor ?? cat.color ?? '#64748b'
+            return L.marker(latlng, {
+              icon: L.divIcon({
+                html: `<div class="poi-map-marker" style="--poi-bg:${color}"><span class="poi-map-icon">${ms.icon}</span></div>`,
+                className: '',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+              }),
+            })
+          }
+          // markerStyle present but iconSet='circle' → fall through to circleMarker
+        } else if (cat?.icon) {
+          // Legacy: category has emoji icon but no markerStyle (old saved projects)
+          const color = cat.color ?? '#64748b'
+          return L.marker(latlng, {
+            icon: L.divIcon({
+              html: `<div class="poi-map-marker" style="--poi-bg:${color}"><span class="poi-map-icon">${cat.icon}</span></div>`,
+              className: '',
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+            }),
+          })
+        }
+
+        const base = leafletStyleForCategory(cat, 'point', catStyle)
         const override = layer.featureOverrides?.[getFeatureKey(feature)]
         return L.circleMarker(latlng, applyFeatureOverride(base, override, 'point'))
       }
@@ -522,7 +626,7 @@ function SourceLayerRenderer({ layer, pane }) {
 
   return (
     <GeoJSON
-      key={`src-${layer.id}-${moveCount}-${getLayerStyleSignature(layer)}`}
+      key={`src-${layer.id}-${moveCount}-${getLayerRenderSignature(layer)}`}
       data={geojsonData}
       style={getFeatureStyle}
       pointToLayer={pointToLayer}

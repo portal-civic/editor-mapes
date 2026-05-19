@@ -1,5 +1,6 @@
 import { normalizeCategory, normalizeCategoricalStyle } from '../sources/categoricalStyle'
 import { resolveLegendLabel } from './legendLayout'
+import { getPoiHiddenLegendValues } from '../osm/poiCategoryStyle'
 
 // ─── Per-layer legend entry ───────────────────────────────────────────────────
 // Returns { title, rows } | null
@@ -32,6 +33,14 @@ export function buildLegendEntry(layer, options = {}) {
     // Viewport filter: only categories with visible features in the current bbox
     if (visibleValues !== undefined) {
       cats = cats.filter((c) => visibleValues.has(String(c.value)))
+    }
+
+    // POI visibility filter: hide subcategories/categories toggled off in PoiFilterPanel
+    if (layer.poiConfig) {
+      const hiddenValues = getPoiHiddenLegendValues(layer)
+      if (hiddenValues.size > 0) {
+        cats = cats.filter((c) => !hiddenValues.has(String(c.value)))
+      }
     }
 
     if (orderMode === 'alpha') {
@@ -107,7 +116,7 @@ export function buildLegendEntry(layer, options = {}) {
         }
       }
 
-      return { label, geometryType: geom, style }
+      return { label, geometryType: geom, style, icon: cat.icon ?? null, markerStyle: cat.markerStyle ?? null }
     })
 
     // "Altres" group: summarises categories below the count threshold

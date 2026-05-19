@@ -79,6 +79,8 @@ import IsochroneModal from './components/IsochroneModal'
 import BusyOverlay from './components/BusyOverlay'
 import SpatialOverlayModal from './components/SpatialOverlayModal'
 import OsmPoiModal from './components/OsmPoiModal'
+import { buildPoiCategoricalConfig, applyPoiMarkerStyleToCategories } from './modules/osm/poiCategoryStyle'
+import LayerFilterModal from './components/LayerFilterModal'
 import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
@@ -148,6 +150,7 @@ function App() {
   const [showIsochroneModal, setShowIsochroneModal] = useState(false)
   const [showSpatialOverlay, setShowSpatialOverlay] = useState(false)
   const [showOsmPoiModal, setShowOsmPoiModal] = useState(false)
+  const [filterModalLayerId, setFilterModalLayerId] = useState(null)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
   // rightPanelExpanded: local UI state — not persisted to project
@@ -1957,7 +1960,7 @@ function App() {
 
   // Create a categorical point layer from OSM POI results.
   // selectedCategories: [{ id, label, color, icon, ... }]
-  const handleOsmPoiCreateLayer = (geojson, layerName, selectedCategories) => {
+  const handleOsmPoiCreateLayer = (geojson, _layerNameIgnored, selectedCategories) => {
     const meta = readGeoJSONMeta(geojson)
     if (!meta) return
 
@@ -1968,16 +1971,14 @@ function App() {
     const layerId = `osm-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
     const layerColor = '#f39c12'
 
-    // Build categorical style from the selected categories
-    const categoryField = 'poi_category_label'
-    const categories = selectedCategories.map((cat) =>
-      normalizeCategory({
-        value: cat.label,
-        label: cat.label,
-        color: cat.color,
-        visible: true,
-      }),
-    )
+    // Build categorical style at subcategory level with canonical POI colours
+    const displayMode = 'subcategory'
+    const { field, categories } = buildPoiCategoricalConfig(meta.rawFeatures, displayMode)
+
+    // Generate "Punts d'interès", "Punts d'interès 2", etc.
+    const existingPoiCount = layers.filter((l) => l.poiConfig).length
+    const baseName = "Punts d'interès"
+    const layerName = existingPoiCount === 0 ? baseName : `${baseName} ${existingPoiCount + 1}`
 
     setSources((s) => [...s, {
       id: sourceId, type: 'geojson', fileName: layerName,
@@ -1993,7 +1994,7 @@ function App() {
       legendLabel: layerName,
       style: getDefaultLayerStyle('point', layerColor),
       styleMode: 'categorical',
-      categorical: { field: categoryField, categories },
+      categorical: { field, categories },
       features: [],
       type: 'source',
       datasetId: dataset.id,
@@ -2004,6 +2005,7 @@ function App() {
         labelsEnabled: false,
         labelField: 'name',
         minZoomLabels: 14,
+        displayMode,
       },
       poiVisibility: null,
     }]))
@@ -2019,6 +2021,37 @@ function App() {
 
   const handlePoiVisibilityChange = (layerId, poiVisibility) => {
     setLayers((prev) => prev.map((l) => l.id === layerId ? { ...l, poiVisibility } : l))
+  }
+
+  const handlePoiDisplayModeChange = (layerId, newDisplayMode) => {
+    setLayers((prev) => prev.map((l) => {
+      if (l.id !== layerId) return l
+      const features = getDatasetFeatures(l.datasetId) ?? []
+      const { field, categories } = buildPoiCategoricalConfig(features, newDisplayMode)
+      return {
+        ...l,
+        categorical: { ...(l.categorical ?? {}), field, categories },
+        poiConfig: { ...(l.poiConfig ?? {}), displayMode: newDisplayMode },
+        poiVisibility: null, // reset visibility when switching mode
+      }
+    }))
+  }
+
+  const handlePoiApplyMarkerStyle = (layerId, mode) => {
+    setLayers((prev) => prev.map((l) => {
+      if (l.id !== layerId || !l.poiConfig) return l
+      const dm = l.poiConfig.displayMode ?? 'subcategory'
+      const updatedCategories = applyPoiMarkerStyleToCategories(
+        l.categorical?.categories ?? [],
+        mode,
+        dm,
+      )
+      return { ...l, categorical: { ...(l.categorical ?? {}), categories: updatedCategories } }
+    }))
+  }
+
+  const handleLayerFilterChange = (layerId, filters) => {
+    setLayers((prev) => prev.map((l) => l.id === layerId ? { ...l, filters } : l))
   }
 
   const handleIsochroneCreateLayer = (geojson, layerName) => {
@@ -2229,6 +2262,13 @@ function App() {
           mapViewport={mapViewport}
           onClose={() => setShowOsmPoiModal(false)}
           onCreateLayer={handleOsmPoiCreateLayer}
+        />
+      ) : null}
+      {filterModalLayerId != null ? (
+        <LayerFilterModal
+          layer={layers.find((l) => l.id === filterModalLayerId)}
+          onFilterChange={handleLayerFilterChange}
+          onClose={() => setFilterModalLayerId(null)}
         />
       ) : null}
       {isochronePickMode ? (
@@ -2477,6 +2517,9 @@ function App() {
                 onMaskOpacityChange={handleMaskOpacityChange}
                 onMaskColorChange={handleMaskColorChange}
                 onPoiVisibilityChange={handlePoiVisibilityChange}
+                onPoiDisplayModeChange={handlePoiDisplayModeChange}
+                onPoiApplyMarkerStyle={handlePoiApplyMarkerStyle}
+                onOpenFilterModal={setFilterModalLayerId}
                 panelExpanded={rightPanelExpanded}
                 onTogglePanelExpand={() => setRightPanelExpanded((v) => !v)}
               />

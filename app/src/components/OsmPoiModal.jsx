@@ -140,7 +140,8 @@ export default function OsmPoiModal({ layers, mapViewport, onClose, onCreateLaye
     const geojson = { type: 'FeatureCollection', features: result.features }
     const zoneName = zoneMode === 'layer' && selectedLayer ? selectedLayer.name : 'Viewport'
     const catCount = selectedCategoryIds.size
-    const layerName = `POI OSM – ${zoneName} (${catCount} cat.)`
+    void zoneName; void catCount
+    const layerName = "Punts d'interès"
     const selectedCategories = OSM_POI_CATEGORIES.filter((c) => selectedCategoryIds.has(c.id))
     onCreateLayer(geojson, layerName, selectedCategories)
     onClose()
@@ -157,7 +158,7 @@ export default function OsmPoiModal({ layers, mapViewport, onClose, onCreateLaye
       <div className="osm-modal">
         {/* Header */}
         <div className="sovlay-header">
-          <h2 className="sovlay-title">Punts d'interès OSM</h2>
+          <h2 className="sovlay-title">Punts d'interès</h2>
           <button type="button" className="sovlay-close" onClick={onClose} aria-label="Tancar">✕</button>
         </div>
 
