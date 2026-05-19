@@ -1,5 +1,4 @@
-// Reads metadata from a parsed GeoJSON object without converting or cloning
-// the feature array — just traverses coordinates to compute the bbox.
+import { normalizeFeatureGeometries } from '../geometry/normalizeGeometries'
 
 const VALID_GEOMETRY_TYPES = new Set([
   'Point', 'MultiPoint', 'LineString', 'MultiLineString', 'Polygon', 'MultiPolygon',
@@ -43,11 +42,14 @@ export function readGeoJSONMeta(parsedData) {
 
   if (features.length === 0) return null
 
+  // Normalize polygon geometries: fix ring ordering, detect multi-exterior polygons
+  const normalizedFeatures = normalizeFeatureGeometries(features)
+
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
   const fields = new Set()
   const geomTypes = new Set()
 
-  for (const f of features) {
+  for (const f of normalizedFeatures) {
     if (f.properties && typeof f.properties === 'object') {
       for (const k of Object.keys(f.properties)) fields.add(k)
     }
@@ -74,6 +76,6 @@ export function readGeoJSONMeta(parsedData) {
     bbox,
     fields: [...fields].slice(0, 50),
     geometryType,
-    rawFeatures: features,
+    rawFeatures: normalizedFeatures,
   }
 }

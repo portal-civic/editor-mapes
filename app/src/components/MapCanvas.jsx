@@ -20,6 +20,7 @@ import { getTablerIconSvgContent } from '../icons/tablerIconResolver'
 import { resolveFaIcon } from '../icons/faIconResolver'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { filterByViewportBbox } from '../modules/sources/bboxFilter'
+import { isPoiFeatureVisible } from '../modules/osm/poiVisibility'
 import { leafletStyleForCategory } from '../modules/sources/categoricalStyle'
 import { getFeatureKey } from '../modules/sources/featureKey'
 import MapLegendOverlay from './MapLegendOverlay'
@@ -360,6 +361,8 @@ function pointInGeoJSONFeature(pt, geometry) {
 // Keeps source layers interactive:false (canvas/pane issues avoided) and
 // does hit-testing on the raw GeoJSON data instead.
 
+const POINT_HIT_RADIUS_PX = 10
+
 function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeatureClick }) {
   const map = useMap()
   useMapEvents({
@@ -367,25 +370,55 @@ function MapSourceFeatureClickHandler({ sourceLayers, isSelectMode, onSourceFeat
       if (!isSelectMode) return
       const { lat, lng } = e.latlng
       const pt = [lng, lat] // GeoJSON order: [longitude, latitude]
+      const clickPx = map.latLngToContainerPoint(e.latlng)
 
       const bounds = map.getBounds()
       const viewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+      const reversedLayers = [...sourceLayers].reverse()
 
-      // Iterate layers top-to-bottom (last in array = highest z-order rendered first)
-      for (const layer of [...sourceLayers].reverse()) {
+      // ── Points (rendered on top) — pixel-distance hit test ──
+      for (const layer of reversedLayers) {
+        if (layer.geometryType !== 'point') continue
+        const allFeatures = getDatasetFeatures(layer.datasetId) ?? []
+        const candidates = filterByViewportBbox(allFeatures, viewport)
+        let bestFeature = null
+        let bestDist = POINT_HIT_RADIUS_PX
+
+        for (const feature of candidates) {
+          if (!isPoiFeatureVisible(feature, layer.poiVisibility)) continue
+          const geom = feature?.geometry
+          if (!geom) continue
+          const coordsList = geom.type === 'Point'
+            ? [geom.coordinates]
+            : geom.type === 'MultiPoint' ? geom.coordinates : []
+          for (const [fLng, fLat] of coordsList) {
+            const fPx = map.latLngToContainerPoint(L.latLng(fLat, fLng))
+            const dx = clickPx.x - fPx.x
+            const dy = clickPx.y - fPx.y
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist < bestDist) { bestDist = dist; bestFeature = feature }
+          }
+        }
+        if (bestFeature) {
+          onSourceFeatureClick?.({ layerId: layer.id, featureKey: getFeatureKey(bestFeature), feature: bestFeature })
+          return
+        }
+      }
+
+      // ── Polygons — point-in-polygon hit test ──
+      for (const layer of reversedLayers) {
         if (layer.geometryType !== 'polygon') continue
         const allFeatures = getDatasetFeatures(layer.datasetId) ?? []
-        // Pre-filter to viewport to keep hit-testing fast
         const candidates = filterByViewportBbox(allFeatures, viewport)
         for (const feature of candidates) {
           if (pointInGeoJSONFeature(pt, feature?.geometry)) {
-            // getFeatureKey uses _srcIdx (embedded by storeDatasetFeatures) for stable key
             const key = getFeatureKey(feature)
             onSourceFeatureClick?.({ layerId: layer.id, featureKey: key, feature })
             return
           }
         }
       }
+
       // Click on empty space — deselect
       onSourceFeatureClick?.(null)
     },
@@ -408,8 +441,9 @@ function SourceLayerRenderer({ layer, pane }) {
     const viewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
     const allFeatures = getDatasetFeatures(layer.datasetId)
     const visible = filterByViewportBbox(allFeatures, viewport)
+      .filter((f) => isPoiFeatureVisible(f, layer.poiVisibility))
     return { type: 'FeatureCollection', features: visible }
-  }, [layer.datasetId, moveCount, map])
+  }, [layer.datasetId, layer.poiVisibility, moveCount, map])
 
   const isCategorical = layer.styleMode === 'categorical' && !!layer.categorical?.field
 
@@ -805,6 +839,16 @@ function MapCanvas({
               fillOpacity: 0.18,
               dashArray: undefined,
             })}
+            pointToLayer={(_feat, latlng) =>
+              L.circleMarker(latlng, {
+                radius: 10,
+                color: '#1e40af',
+                weight: 3,
+                opacity: 1,
+                fillColor: '#3b82f6',
+                fillOpacity: 0.4,
+              })
+            }
             pane="selection-pane"
             interactive={false}
           />

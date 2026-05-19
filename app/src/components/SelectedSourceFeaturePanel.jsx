@@ -1,34 +1,8 @@
+import { useState } from 'react'
 import { normalizeCategory } from '../modules/sources/categoricalStyle'
-
-function formatArea(m2) {
-  if (m2 >= 1_000_000) return `${(m2 / 1_000_000).toFixed(2)} km²`
-  if (m2 >= 10_000) return `${(m2 / 10_000).toFixed(2)} ha`
-  return `${Math.round(m2).toLocaleString()} m²`
-}
-
-function calcPolygonAreaM2(geometry) {
-  if (!geometry) return null
-  let rings = null
-  if (geometry.type === 'Polygon') rings = [geometry.coordinates[0]]
-  else if (geometry.type === 'MultiPolygon') rings = geometry.coordinates.map((p) => p[0])
-  if (!rings) return null
-
-  let total = 0
-  for (const ring of rings) {
-    if (!ring || ring.length < 3) continue
-    const latMid = ring.reduce((s, c) => s + c[1], 0) / ring.length
-    const mPerDegLat = 111320
-    const mPerDegLon = 111320 * Math.cos((latMid * Math.PI) / 180)
-    let area = 0
-    for (let i = 0, n = ring.length - 1; i < n; i++) {
-      area +=
-        ring[i][0] * mPerDegLon * ring[i + 1][1] * mPerDegLat -
-        ring[i + 1][0] * mPerDegLon * ring[i][1] * mPerDegLat
-    }
-    total += Math.abs(area / 2)
-  }
-  return total > 0 ? total : null
-}
+import { measureFeature } from '../modules/geometry/measurements'
+import MeasurementSection from './MeasurementSection'
+import { normalizePoiFeature, isOsmPoiFeature } from '../modules/osm/normalizePoiFeature'
 
 const EMPTY_OVERRIDE = {
   fillColor: '',
@@ -52,6 +26,105 @@ function readOverride(raw) {
     legendLabel: raw.legendLabel ?? '',
   }
 }
+
+// ── OSM POI card ──────────────────────────────────────────────────────────────
+
+function PoiField({ label, value, isLink }) {
+  if (!value) return null
+  return (
+    <div className="poi-field">
+      <span className="poi-field-label">{label}</span>
+      {isLink ? (
+        <a className="poi-field-val poi-field-val--link" href={value} target="_blank" rel="noopener noreferrer">
+          {value.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+        </a>
+      ) : (
+        <span className="poi-field-val">{value}</span>
+      )}
+    </div>
+  )
+}
+
+function PoiCard({ feature }) {
+  const [showRaw, setShowRaw] = useState(false)
+  const poi = normalizePoiFeature(feature)
+  if (!poi) return null
+
+  const props = feature?.properties ?? {}
+  const displayTitle = poi.title || poi.subcategory || poi.category
+
+  // Raw OSM keys to show in the collapsible section (exclude our synthetic fields)
+  const syntheticKeys = new Set(['poi_category', 'poi_category_label', 'osm_type', 'osm_id', 'name'])
+  const rawEntries = Object.entries(props).filter(([k]) => !syntheticKeys.has(k))
+
+  const coordText = (poi.lat != null && poi.lng != null)
+    ? `${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}`
+    : null
+
+  return (
+    <div className="poi-card ssf-section">
+      {/* Header: icon + title */}
+      <div className="poi-card-header">
+        {poi.icon && (
+          <span className="poi-card-icon" style={{ '--poi-color': poi.color ?? '#64748b' }}>
+            {poi.icon}
+          </span>
+        )}
+        <div className="poi-card-title-block">
+          <p className="poi-card-title">{displayTitle}</p>
+          <p className="poi-card-category" style={{ color: poi.color ?? '#64748b' }}>
+            {poi.category}
+          </p>
+        </div>
+      </div>
+
+      {/* Fields */}
+      <div className="poi-fields">
+        {poi.subcategory && poi.title && (
+          <PoiField label="Subtipus" value={poi.subcategory} />
+        )}
+        <PoiField label="Adreça" value={poi.address} />
+        <PoiField label="Telèfon" value={poi.phone} />
+        <PoiField label="Web" value={poi.website} isLink />
+        <PoiField label="Operador" value={poi.operator} />
+        {poi.description && <PoiField label="Descripció" value={poi.description} />}
+        {coordText && <PoiField label="Coordenades" value={coordText} />}
+        {poi.osm_id && (
+          <PoiField label="OSM ID" value={poi.osm_id} />
+        )}
+      </div>
+
+      {/* Collapsible raw attributes */}
+      {rawEntries.length > 0 && (
+        <div className="poi-raw-section">
+          <button
+            type="button"
+            className="poi-raw-toggle"
+            onClick={() => setShowRaw((v) => !v)}
+            aria-expanded={showRaw}
+          >
+            <span className="poi-raw-toggle-arrow">{showRaw ? '▾' : '▸'}</span>
+            Atributs tècnics ({rawEntries.length})
+          </button>
+          {showRaw && (
+            <div className="ssf-props-table poi-raw-table">
+              {rawEntries.map(([k, v]) => (
+                <div key={k} className="ssf-prop-row">
+                  <span className="ssf-prop-key poi-raw-key" title={k}>{k}</span>
+                  <span className="ssf-prop-val" title={v == null ? '' : String(v)}>
+                    {v == null ? <em>null</em> : String(v)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Category badge (non-POI layers) ──────────────────────────────────────────
 
 function CategoryBadge({ layer, feature, featureKey }) {
   if (layer?.styleMode !== 'categorical') return null
@@ -127,10 +200,10 @@ export default function SelectedSourceFeaturePanel({
   onFeatureOverrideChange,
 }) {
   const props = feature?.properties ?? {}
-  const area = calcPolygonAreaM2(feature?.geometry)
   const raw = layer?.featureOverrides?.[featureKey]
   const ov = readOverride(raw)
   const hasOverride = raw != null
+  const isPoi = isOsmPoiFeature(feature)
 
   const set = (patch) => onFeatureOverrideChange?.(layer.id, featureKey, patch)
   const clearAll = () => onFeatureOverrideChange?.(layer.id, featureKey, null)
@@ -152,32 +225,31 @@ export default function SelectedSourceFeaturePanel({
         </div>
       </div>
 
-      <CategoryBadge layer={layer} feature={feature} featureKey={featureKey} />
-
-      {area != null ? (
-        <div className="ssf-section">
-          <p className="ssf-section-title">Superfície</p>
-          <p className="ssf-area">{formatArea(area)}</p>
-        </div>
-      ) : null}
-
-      <div className="ssf-section">
-        <p className="ssf-section-title">Atributs</p>
-        {propEntries.length === 0 ? (
-          <p className="ssf-empty-props">Sense atributs</p>
-        ) : (
-          <div className="ssf-props-table">
-            {propEntries.map(([k, v]) => (
-              <div key={k} className="ssf-prop-row">
-                <span className="ssf-prop-key" title={k}>{k}</span>
-                <span className="ssf-prop-val" title={v == null ? '' : String(v)}>
-                  {v == null ? <em>null</em> : String(v)}
-                </span>
+      {isPoi ? (
+        <PoiCard feature={feature} />
+      ) : (
+        <>
+          <CategoryBadge layer={layer} feature={feature} featureKey={featureKey} />
+          <MeasurementSection feature={feature} />
+          <div className="ssf-section">
+            <p className="ssf-section-title">Atributs</p>
+            {propEntries.length === 0 ? (
+              <p className="ssf-empty-props">Sense atributs</p>
+            ) : (
+              <div className="ssf-props-table">
+                {propEntries.map(([k, v]) => (
+                  <div key={k} className="ssf-prop-row">
+                    <span className="ssf-prop-key" title={k}>{k}</span>
+                    <span className="ssf-prop-val" title={v == null ? '' : String(v)}>
+                      {v == null ? <em>null</em> : String(v)}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <div className="ssf-section">
         <p className="ssf-section-title">Estil propi de l'element</p>

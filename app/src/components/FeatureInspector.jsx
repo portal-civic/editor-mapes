@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import IconPicker from './IconPicker'
+import { measureDrawnFeature } from '../modules/geometry/measurements'
+import MeasurementSection from './MeasurementSection'
 
 // Parses the stored "fa:iconid" format. Returns the icon id string or null.
 function parseFeatureIcon(value) {
@@ -9,6 +11,7 @@ function parseFeatureIcon(value) {
 }
 
 function FeatureInspector({ feature, layer, onUpdate, onClose }) {
+  const measurement = measureDrawnFeature(feature, layer?.geometryType)
   const [draft, setDraft] = useState({
     name: feature.name ?? '',
     label: feature.label ?? '',
@@ -46,6 +49,7 @@ function FeatureInspector({ feature, layer, onUpdate, onClose }) {
       </div>
       <div className="panel-content">
         <p className="layer-meta">{layer.name} \u00b7 {layer.geometryType}</p>
+        <MeasurementSection measurement={measurement} className="inspector-section" />
         <label>
           Nom
           <input

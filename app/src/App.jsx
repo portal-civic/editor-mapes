@@ -63,7 +63,7 @@ import {
 import { PALETTES } from './modules/styles/palettes'
 import { buildLegendEntries } from './modules/legend/buildLegendEntries'
 import { DEFAULT_LEGEND_LAYOUT, normalizeLegendLayout } from './modules/legend/legendLayout'
-import { computeVisibleValuesByPolygon } from './modules/legend/polygonFilter'
+import { computeVisibleValuesByLayerId } from './modules/legend/visibleCategories'
 import {
   applyDictionaryToCategories,
   ALL_DICTIONARIES,
@@ -76,6 +76,9 @@ import LegendConfigPanel from './components/LegendConfigPanel'
 import SelectedSourceFeaturePanel from './components/SelectedSourceFeaturePanel'
 import LibraryDialog from './components/LibraryDialog'
 import IsochroneModal from './components/IsochroneModal'
+import BusyOverlay from './components/BusyOverlay'
+import SpatialOverlayModal from './components/SpatialOverlayModal'
+import OsmPoiModal from './components/OsmPoiModal'
 import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
@@ -143,12 +146,22 @@ function App() {
   const [projectName, setProjectName] = useState('Nou projecte')
   const [showLibraryDialog, setShowLibraryDialog] = useState(false)
   const [showIsochroneModal, setShowIsochroneModal] = useState(false)
+  const [showSpatialOverlay, setShowSpatialOverlay] = useState(false)
+  const [showOsmPoiModal, setShowOsmPoiModal] = useState(false)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
   // rightPanelExpanded: local UI state — not persisted to project
   const [rightPanelExpanded, setRightPanelExpanded] = useState(false)
   // mapComposition: aspect-ratio constraint for the map canvas area
   const [mapComposition, setMapComposition] = useState({ mode: 'auto' })
+  // busyState: global progress indicator for heavy async operations
+  const [busyState, setBusyState] = useState({ active: false, message: null, blocking: false })
+  const setBusy = (opts) =>
+    setBusyState(
+      !opts || opts.active === false
+        ? { active: false, message: null, blocking: false }
+        : { active: true, message: opts.message ?? null, blocking: opts.blocking ?? false },
+    )
 
   const selectedBasemap = useMemo(
     () =>
@@ -266,33 +279,23 @@ function App() {
   // Category values visible within a polygon or viewport — used to filter legend entries.
   // Polygon filter takes priority over viewport filter when both are active.
   const visibleValuesByLayerId = useMemo(() => {
-    // Priority 1: polygon spatial filter
+    // Priority 1: polygon spatial filter (real geometric intersection via Turf)
     if (legendLayout.filterByPolygon && legendLayout.polygonLayerId) {
       const refLayer = layers.find((l) => l.id === legendLayout.polygonLayerId && l.visible)
       if (refLayer) {
-        return computeVisibleValuesByPolygon(layers, refLayer, legendLayout.polygonFeatureIndex)
+        return computeVisibleValuesByLayerId(layers, 'polygon', {
+          refLayer,
+          featureIndex: legendLayout.polygonFeatureIndex ?? null,
+        })
       }
     }
 
-    // Priority 2: viewport filter
-    if (!legendLayout.showOnlyVisibleInViewport || !mapViewport) return null
-    const result = {}
-    for (const layer of layers) {
-      if (!layer.visible || layer.styleMode !== 'categorical') continue
-      const field = layer.categorical?.field
-      if (!field) continue
-      const values = new Set()
-      if (layer.datasetId) {
-        const features = getDatasetFeatures(layer.datasetId)
-        const visible = filterByViewportBbox(features, mapViewport)
-        for (const feat of visible) {
-          const val = feat.properties?.[field]
-          if (val != null) values.add(String(val))
-        }
-      }
-      result[layer.id] = values
+    // Priority 2: viewport filter (real geometric intersection via Turf)
+    if (legendLayout.showOnlyVisibleInViewport && mapViewport) {
+      return computeVisibleValuesByLayerId(layers, 'viewport', { viewport: mapViewport })
     }
-    return result
+
+    return null
   }, [
     legendLayout.filterByPolygon, legendLayout.polygonLayerId, legendLayout.polygonFeatureIndex,
     legendLayout.showOnlyVisibleInViewport,
@@ -635,10 +638,13 @@ function App() {
       window.alert("No s'ha trobat el mapa per exportar")
       return
     }
+    setBusy({ active: true, message: 'Exportant capes…', blocking: true })
     try {
       await exportAllVisibleLayers(mapInstanceRef.current, layers, selectedBasemap)
     } catch {
       window.alert("No s'ha pogut exportar les capes")
+    } finally {
+      setBusy({ active: false })
     }
   }
 
@@ -647,10 +653,13 @@ function App() {
       window.alert("No s'ha trobat el mapa per exportar")
       return
     }
+    setBusy({ active: true, message: 'Generant PDF…', blocking: true })
     try {
       await exportPDFSimple(mapInstanceRef.current, layers, selectedBasemap, focusMask)
     } catch (err) {
       window.alert(`No s'ha pogut exportar el PDF: ${err.message}`)
+    } finally {
+      setBusy({ active: false })
     }
   }
 
@@ -663,10 +672,13 @@ function App() {
       window.alert("El basemap seleccionat no és compatible amb l'exportació HD (cal un basemap de teseles XYZ).")
       return
     }
+    setBusy({ active: true, message: 'Exportant basemap HD…', blocking: true })
     try {
       await exportBasemapHDPng(mapInstanceRef.current, selectedBasemap, opts)
     } catch (err) {
       window.alert(`No s'ha pogut exportar el basemap HD: ${err.message}`)
+    } finally {
+      setBusy({ active: false })
     }
   }
 
@@ -768,6 +780,7 @@ function App() {
       return
     }
 
+    setBusy({ active: true, message: 'Generant PNG…', blocking: true })
     try {
       const titleText = legendLayout.exportTitleEnabled
         ? (legendLayout.exportTitle || projectName || '')
@@ -787,6 +800,8 @@ function App() {
       })
     } catch {
       window.alert("No s'ha pogut exportar la imatge PNG")
+    } finally {
+      setBusy({ active: false })
     }
   }
 
@@ -918,6 +933,7 @@ function App() {
       return
     }
 
+    setBusy({ active: true, message: 'Llegint GeoJSON…', blocking: false })
     try {
       const fileContent = await selectedFile.text()
       const parsedData = JSON.parse(fileContent)
@@ -944,6 +960,7 @@ function App() {
     } catch {
       window.alert("No s'ha pogut llegir el fitxer GeoJSON")
     } finally {
+      setBusy({ active: false })
       event.target.value = ''
     }
   }
@@ -1018,6 +1035,15 @@ function App() {
   // For WFS entries, entry.typeName must already be resolved by LibraryDialog.
   // Returns { featureCount, warned } on success; throws with err.message code on failure.
   const handleLibraryImport = async (entry) => {
+    setBusy({ active: true, message: `Carregant ${entry.name ?? 'capa'}…`, blocking: false })
+    try {
+    return await _doLibraryImport(entry)
+    } finally {
+      setBusy({ active: false })
+    }
+  }
+
+  const _doLibraryImport = async (entry) => {
     // Resolve viewport from state, fall back to map instance
     const viewport =
       mapViewport ??
@@ -1183,6 +1209,7 @@ function App() {
     const selectedFile = event.target.files?.[0]
     if (!selectedFile) return
 
+    setBusy({ active: true, message: 'Llegint shapefile…', blocking: false })
     try {
       const result = await readShapefileZip(selectedFile)
 
@@ -1204,6 +1231,7 @@ function App() {
     } catch {
       window.alert("No s'ha pogut llegir el shapefile")
     } finally {
+      setBusy({ active: false })
       event.target.value = ''
     }
   }
@@ -1227,6 +1255,7 @@ function App() {
     const selectedFile = event.target.files?.[0]
     if (!selectedFile) return
 
+    setBusy({ active: true, message: 'Llegint GeoPackage…', blocking: false })
     try {
       const result = await openGpkgFile(selectedFile)
 
@@ -1250,6 +1279,7 @@ function App() {
     } catch {
       window.alert("No s'ha pogut obrir el GeoPackage")
     } finally {
+      setBusy({ active: false })
       event.target.value = ''
     }
   }
@@ -1882,6 +1912,115 @@ function App() {
     setShowIsochroneModal(true)
   }
 
+  // Generic: create a source layer from a GeoJSON FeatureCollection.
+  // Used by both isochrone and spatial overlay results.
+  const handleCreateLayerFromGeoJSON = (geojson, layerName, layerColor = '#8b5cf6', prefix = 'gen') => {
+    const meta = readGeoJSONMeta(geojson)
+    if (!meta) return
+
+    const sourceId = `src-${prefix}-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    storeSourceFeatures(sourceId, meta.rawFeatures)
+
+    const dataset = createDatasetFromSource(sourceId, {})
+    const effectiveGeomType = meta.geometryType === 'mixed' ? 'polygon' : meta.geometryType
+    const layerId = `${prefix}-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
+
+    setSources((s) => [...s, {
+      id: sourceId, type: 'geojson', fileName: layerName,
+      meta: { featureCount: meta.featureCount, bbox: meta.bbox, fields: meta.fields, geometryType: effectiveGeomType },
+    }])
+    setDatasets((d) => [...d, dataset])
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, {
+      id: layerId,
+      name: layerName,
+      color: layerColor,
+      geometryType: effectiveGeomType,
+      visible: true,
+      legendLabel: layerName,
+      style: { ...getDefaultLayerStyle(effectiveGeomType, layerColor), fillOpacity: 0.25, strokeWidth: 2 },
+      features: [],
+      type: 'source',
+      datasetId: dataset.id,
+      sourceId,
+      meta: { totalFeatureCount: meta.featureCount, loadedFeatureCount: dataset.featureCount, fields: meta.fields ?? [] },
+      legend: { title: layerName, showCounts: false, orderMode: 'manual', visible: true },
+    }]))
+    setEditableLayerId(layerId)
+
+    if (meta.bbox && mapInstanceRef.current) {
+      const [west, south, east, north] = meta.bbox
+      if ([west, south, east, north].every(Number.isFinite)) {
+        setMapNavigationRequest({ id: `${Date.now()}-${Math.random()}`, type: 'fitBounds', bounds: [[south, west], [north, east]] })
+      }
+    }
+  }
+
+  // Create a categorical point layer from OSM POI results.
+  // selectedCategories: [{ id, label, color, icon, ... }]
+  const handleOsmPoiCreateLayer = (geojson, layerName, selectedCategories) => {
+    const meta = readGeoJSONMeta(geojson)
+    if (!meta) return
+
+    const sourceId = `src-osm-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    storeSourceFeatures(sourceId, meta.rawFeatures)
+
+    const dataset = createDatasetFromSource(sourceId, {})
+    const layerId = `osm-layer-${Date.now()}-${Math.round(Math.random() * 10000)}`
+    const layerColor = '#f39c12'
+
+    // Build categorical style from the selected categories
+    const categoryField = 'poi_category_label'
+    const categories = selectedCategories.map((cat) =>
+      normalizeCategory({
+        value: cat.label,
+        label: cat.label,
+        color: cat.color,
+        visible: true,
+      }),
+    )
+
+    setSources((s) => [...s, {
+      id: sourceId, type: 'geojson', fileName: layerName,
+      meta: { featureCount: meta.featureCount, bbox: meta.bbox, fields: meta.fields, geometryType: 'point' },
+    }])
+    setDatasets((d) => [...d, dataset])
+    setLayers((currentLayers) => ensureInitialPointLayer([...currentLayers, {
+      id: layerId,
+      name: layerName,
+      color: layerColor,
+      geometryType: 'point',
+      visible: true,
+      legendLabel: layerName,
+      style: getDefaultLayerStyle('point', layerColor),
+      styleMode: 'categorical',
+      categorical: { field: categoryField, categories },
+      features: [],
+      type: 'source',
+      datasetId: dataset.id,
+      sourceId,
+      meta: { totalFeatureCount: meta.featureCount, loadedFeatureCount: dataset.featureCount, fields: meta.fields ?? [] },
+      legend: { title: layerName, showCounts: false, orderMode: 'manual', visible: true },
+      poiConfig: {
+        labelsEnabled: false,
+        labelField: 'name',
+        minZoomLabels: 14,
+      },
+      poiVisibility: null,
+    }]))
+    setEditableLayerId(layerId)
+
+    if (meta.bbox && mapInstanceRef.current) {
+      const [west, south, east, north] = meta.bbox
+      if ([west, south, east, north].every(Number.isFinite)) {
+        setMapNavigationRequest({ id: `${Date.now()}-${Math.random()}`, type: 'fitBounds', bounds: [[south, west], [north, east]] })
+      }
+    }
+  }
+
+  const handlePoiVisibilityChange = (layerId, poiVisibility) => {
+    setLayers((prev) => prev.map((l) => l.id === layerId ? { ...l, poiVisibility } : l))
+  }
+
   const handleIsochroneCreateLayer = (geojson, layerName) => {
     const meta = readGeoJSONMeta(geojson)
     if (!meta) return
@@ -1990,7 +2129,8 @@ function App() {
   }
 
   return (
-    <div className="editor-shell">
+    <div className={`editor-shell${busyState.active ? ' editor-shell--busy' : ''}`}>
+      <BusyOverlay active={busyState.active} message={busyState.message} blocking={busyState.blocking} />
       {pendingGeoJSONImport ? (
         <GeoJsonImportDialog
           fileName={pendingGeoJSONImport.fileName}
@@ -2074,6 +2214,23 @@ function App() {
           onClose={() => setShowIsochroneModal(false)}
         />
       ) : null}
+      {showSpatialOverlay ? (
+        <SpatialOverlayModal
+          layers={layers}
+          onClose={() => setShowSpatialOverlay(false)}
+          onCreateLayer={(geojson, name) =>
+            handleCreateLayerFromGeoJSON(geojson, name, '#e05c2e', 'sovlay')
+          }
+        />
+      ) : null}
+      {showOsmPoiModal ? (
+        <OsmPoiModal
+          layers={layers}
+          mapViewport={mapViewport}
+          onClose={() => setShowOsmPoiModal(false)}
+          onCreateLayer={handleOsmPoiCreateLayer}
+        />
+      ) : null}
       {isochronePickMode ? (
         <div className="iso-pick-banner">
           <span>Clica el mapa per seleccionar el punt d'origen</span>
@@ -2106,6 +2263,8 @@ function App() {
         onExportPDFSimple={handleExportPDFSimple}
         onExportBasemapHD={handleExportBasemapHD}
         onCreateIsochrone={() => { setIsochronePickedPoint(null); setShowIsochroneModal(true) }}
+        onOpenSpatialOverlay={() => setShowSpatialOverlay(true)}
+        onOpenOsmPoi={() => setShowOsmPoiModal(true)}
       />
 
       <main className={`workspace${rightPanelExpanded ? ' workspace--wide-panel' : ''}`}>
@@ -2317,6 +2476,7 @@ function App() {
                 onToggleLayerInMask={handleToggleLayerInMask}
                 onMaskOpacityChange={handleMaskOpacityChange}
                 onMaskColorChange={handleMaskColorChange}
+                onPoiVisibilityChange={handlePoiVisibilityChange}
                 panelExpanded={rightPanelExpanded}
                 onTogglePanelExpand={() => setRightPanelExpanded((v) => !v)}
               />

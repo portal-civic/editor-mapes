@@ -36,6 +36,8 @@ function TopBar({
   onExportPDFSimple,
   onExportBasemapHD,
   onCreateIsochrone,
+  onOpenSpatialOverlay,
+  onOpenOsmPoi,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -335,6 +337,20 @@ function TopBar({
                 onClick={() => { onCreateIsochrone?.(); setShowToolsMenu(false) }}
               >
                 Crear isòcrona
+              </button>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onOpenSpatialOverlay?.(); setShowToolsMenu(false) }}
+              >
+                Creuar capes
+              </button>
+              <button
+                type="button"
+                className="topbar-dropdown-item"
+                onClick={() => { onOpenOsmPoi?.(); setShowToolsMenu(false) }}
+              >
+                Punts d'interès OSM
               </button>
             </div>
           ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import IconPicker from './IconPicker'
 import CategoryEditorModal from './CategoryEditorModal'
+import PoiFilterPanel from './PoiFilterPanel'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { normalizeCategory, normalizeCategoricalStyle } from '../modules/sources/categoricalStyle'
 import { PALETTES, PALETTE_ORDER } from '../modules/styles/palettes'
@@ -760,6 +761,7 @@ function LayerInspector({
   onToggleLayerInMask,
   onMaskOpacityChange,
   onMaskColorChange,
+  onPoiVisibilityChange,
   panelExpanded = false,
   onTogglePanelExpand,
 }) {
@@ -1149,6 +1151,13 @@ function LayerInspector({
             ) : null}
           </SecBlock>
         ) : null}
+
+        {/* ── Filtres POI ────────────────────────────────────────── */}
+        {layer.poiConfig != null && (
+          <SecBlock id="poifilter" title="Filtres POI" collapsed={isCollapsed('poifilter')} onToggle={toggle}>
+            <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
+          </SecBlock>
+        )}
 
         {/* ── Accions ────────────────────────────────────────────── */}
         <SecBlock id="accions" title="Accions" collapsed={isCollapsed('accions')} onToggle={toggle}>
