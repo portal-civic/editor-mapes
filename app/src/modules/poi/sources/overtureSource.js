@@ -232,13 +232,103 @@ export function loadOvertureGeoJson(geojsonText, catFilter = null) {
   }
 }
 
+// ─── Conversió format backend → feature interna ───────────────────────────────
+
 /**
- * Stub per a futur endpoint de backend.
- * Quan existeixi un servidor que accepte bbox + categories, implementar aquí.
+ * Converteix un POI retornat pel backend (format normalitzat) a una feature
+ * GeoJSON interna amb totes les propietats que espera l'app.
+ *
+ * El backend retorna { id, latitude, longitude, overtureBasicCategory, ... }.
+ * Reconstruïm un "props" compatible amb classifyOvertureFeature.
  */
-export async function fetchOverturePoisByBbox({ bbox, categories, signal } = {}) {
-  void bbox; void categories; void signal
-  throw new Error(
-    'La consulta per bbox requereix un backend. Exporta les dades amb el CLI d\'Overture i carrega el fitxer GeoJSON.',
-  )
+export function backendPoiToFeature(poi) {
+  const fakeProps = {
+    basic_category: poi.overtureBasicCategory,
+    taxonomy: {
+      primary: poi.overturePrimaryCategory,
+      hierarchy: poi.overtureHierarchyArr ?? [],
+      alternate: poi.overtureAlternateCategories
+        ? poi.overtureAlternateCategories.split(', ').filter(Boolean)
+        : [],
+    },
+  }
+
+  const { appCategory, appSubcategory } = classifyOvertureFeature(fakeProps)
+  const catDef = APP_CATEGORY_BY_ID[appCategory]
+  const subDef = appSubcategory ? OVERTURE_SUBCAT_BY_ID[appSubcategory] : null
+
+  const icon = subDef?.icon ?? catDef?.icon ?? '📍'
+  const color = subDef?.color ?? catDef?.color ?? '#94a3b8'
+
+  const hierarchyArr = Array.isArray(poi.overtureHierarchyArr) ? poi.overtureHierarchyArr : null
+  const hierarchyText = poi.overtureHierarchy ?? (hierarchyArr ? hierarchyArr.join(' › ') : null)
+
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [poi.longitude, poi.latitude] },
+    properties: {
+      poi_source:              'overture',
+      poi_id:                  poi.id,
+      poi_category:            appCategory,
+      poi_subcategory:         appSubcategory ?? appCategory,
+      poi_category_label:      catDef?.label ?? appCategory,
+      poi_subcategory_label:   subDef?.label ?? catDef?.label ?? appCategory,
+      poi_icon:                icon,
+      poi_color:               color,
+      name:                    poi.name ?? '',
+      address:                 poi.address ?? null,
+      phone:                   Array.isArray(poi.phones) ? (poi.phones[0] ?? null) : null,
+      website:                 Array.isArray(poi.websites) ? (poi.websites[0] ?? null) : null,
+      operator:                null,
+      overture_id:             poi.id,
+      overture_basic_category: poi.overtureBasicCategory,
+      overture_primary:        poi.overturePrimaryCategory,
+      overture_hierarchy:      hierarchyText,
+      overture_hierarchy_arr:  hierarchyArr ? JSON.stringify(hierarchyArr) : null,
+      overture_alternate:      poi.overtureAlternateCategories,
+      overture_confidence:     poi.confidence,
+      overture_operating_status: poi.operatingStatus,
+    },
+  }
+}
+
+// ─── Crida al backend per bbox ────────────────────────────────────────────────
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
+/**
+ * Consulta el backend Node/Express per obtenir Overture Places dins un bbox.
+ *
+ * @param {{ bbox: number[], limit?: number, minConfidence?: number, signal?: AbortSignal }} opts
+ * @returns {Promise<{ features: Feature[], count: number }>}
+ */
+export async function fetchOverturePoisByBbox({ bbox, limit = 5000, minConfidence = 0.6, signal } = {}) {
+  if (!API_BASE) {
+    throw new Error(
+      'VITE_API_BASE_URL no està configurada. Afig-la a .env.local (ex. http://localhost:3000).',
+    )
+  }
+
+  const [west, south, east, north] = bbox
+  const url = new URL(`${API_BASE}/api/poi/overture`)
+  url.searchParams.set('bbox', `${west},${south},${east},${north}`)
+  url.searchParams.set('limit', String(limit))
+  if (minConfidence != null) url.searchParams.set('minConfidence', String(minConfidence))
+
+  const resp = await fetch(url.toString(), { signal })
+  if (!resp.ok) {
+    let msg = `Error del servidor: ${resp.status}`
+    try {
+      const body = await resp.json()
+      if (body?.error) msg = body.error
+    } catch { /* ignore */ }
+    const err = new Error(msg)
+    err.status = resp.status
+    throw err
+  }
+
+  const data = await resp.json()
+  const features = (data.pois ?? []).map((poi, i) => backendPoiToFeature(poi, i)).filter(Boolean)
+
+  return { features, count: data.count ?? features.length }
 }

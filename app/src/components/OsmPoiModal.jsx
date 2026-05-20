@@ -2,12 +2,12 @@
  * OsmPoiModal.jsx (ara: modal multi-font de Punts d'Interès)
  * Tabs: OpenStreetMap | Overture Maps | GeoJSON Oficial
  */
-import { useRef, useState } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import * as turf from '@turf/turf'
 import { OSM_POI_CATEGORIES } from '../modules/osm/osmPoiCategories'
 import { APP_CATEGORIES } from '../modules/poi/appCategoryRegistry'
 import { fetchOsmPois } from '../modules/osm/fetchOsmPois'
-import { loadOvertureGeoJson } from '../modules/poi/sources/overtureSource'
+import { loadOvertureGeoJson, fetchOverturePoisByBbox } from '../modules/poi/sources/overtureSource'
 import { loadOfficialGeoJson } from '../modules/poi/sources/officialGeoJsonSource'
 import { getLayerTurfFeatures } from '../modules/analysis/spatialOverlay'
 
@@ -217,22 +217,60 @@ function OsmTab({ layers, mapViewport, onCreateLayer, onClose }) {
 
 // ── Tab Overture ──────────────────────────────────────────────────────────────
 
-const OVERTURE_APP_CATS = ALL_APP_CATEGORIES.filter((c) => !['mobility', 'green'].includes(c.id))
+const API_CONFIGURED = !!import.meta.env.VITE_API_BASE_URL
 
-function OvertureTab({ layers, onCreateLayer, onClose }) {
+function OvertureTab({ mapViewport, onCreateLayer, onClose }) {
+  // ── Mode: 'api' (viewport) o 'file' (importació avançada) ───────────────────
+  const [mode, setMode] = useState(API_CONFIGURED ? 'api' : 'file')
+
+  // ── Mode API ──────────────────────────────────────────────────────────────────
+  const abortRef = useRef(null)
+  const [apiLoading, setApiLoading] = useState(false)
+  const [apiResult, setApiResult] = useState(null)
+  const [apiError, setApiError] = useState(null)
+  const [minConfidence, setMinConfidence] = useState(0.6)
+  const [apiLimit, setApiLimit] = useState(5000)
+
+  const bbox = mapViewport
+    ? [mapViewport.west, mapViewport.south, mapViewport.east, mapViewport.north]
+    : null
+
+  const handleFetchApi = useCallback(async () => {
+    if (!bbox) return
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setApiLoading(true); setApiError(null); setApiResult(null)
+    try {
+      const res = await fetchOverturePoisByBbox({
+        bbox, limit: apiLimit, minConfidence, signal: controller.signal,
+      })
+      setApiResult(res)
+    } catch (err) {
+      if (err.name !== 'AbortError') setApiError(err.message)
+    } finally { setApiLoading(false) }
+  }, [bbox, apiLimit, minConfidence])
+
+  const handleCreateLayerApi = () => {
+    if (!apiResult?.features?.length) return
+    const geojson = { type: 'FeatureCollection', features: apiResult.features }
+    onCreateLayer(geojson, "Punts d'interès (Overture)", [], 'overture')
+    onClose()
+  }
+
+  // ── Mode fitxer ───────────────────────────────────────────────────────────────
   const fileRef = useRef(null)
   const [fileName, setFileName] = useState(null)
   const [geojsonText, setGeojsonText] = useState(null)
   const [selectedCats, setSelectedCats] = useState(new Set())
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [fileResult, setFileResult] = useState(null)
+  const [fileError, setFileError] = useState(null)
+  const [fileLoading, setFileLoading] = useState(false)
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setFileName(file.name)
-    setResult(null); setError(null)
+    setFileName(file.name); setFileResult(null); setFileError(null)
     const reader = new FileReader()
     reader.onload = (ev) => setGeojsonText(ev.target.result)
     reader.readAsText(file)
@@ -241,97 +279,214 @@ function OvertureTab({ layers, onCreateLayer, onClose }) {
   const toggleCat = (id) =>
     setSelectedCats((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  const handleProcess = () => {
+  const handleProcessFile = () => {
     if (!geojsonText) return
-    setLoading(true); setError(null); setResult(null)
+    setFileLoading(true); setFileError(null); setFileResult(null)
     setTimeout(() => {
       try {
         const catFilter = selectedCats.size > 0 ? [...selectedCats] : null
         const res = loadOvertureGeoJson(geojsonText, catFilter)
-        setResult(res)
+        setFileResult(res)
       } catch (err) {
-        setError(err.message)
-      } finally { setLoading(false) }
+        setFileError(err.message)
+      } finally { setFileLoading(false) }
     }, 0)
   }
 
-  const handleCreateLayer = () => {
-    if (!result?.features?.length) return
-    const geojson = { type: 'FeatureCollection', features: result.features }
+  const handleCreateLayerFile = () => {
+    if (!fileResult?.features?.length) return
+    const geojson = { type: 'FeatureCollection', features: fileResult.features }
     onCreateLayer(geojson, "Punts d'interès (Overture)", [], 'overture')
     onClose()
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   return (
     <>
-      <div className="sovlay-field">
-        <label className="sovlay-label">Fitxer GeoJSON d'Overture</label>
-        <p className="sovlay-hint">
-          Exporta amb: <code>overturemaps download --bbox &lt;west,south,east,north&gt; -f geojson --type places -o places.geojson</code>
-        </p>
-        <div className="poi-file-row">
-          <button type="button" className="poi-file-btn" onClick={() => fileRef.current?.click()}>
-            Seleccionar fitxer…
+      {/* Mode switcher */}
+      {API_CONFIGURED && (
+        <div className="poi-overture-mode-row">
+          <button
+            type="button"
+            className={`poi-overture-mode-btn${mode === 'api' ? ' poi-overture-mode-btn--active' : ''}`}
+            onClick={() => setMode('api')}
+          >
+            Viewport actual
           </button>
-          <span className="poi-file-name">{fileName ?? 'Cap fitxer seleccionat'}</span>
-          <input ref={fileRef} type="file" accept=".geojson,.json" style={{ display: 'none' }} onChange={handleFileChange} />
-        </div>
-      </div>
-
-      {geojsonText && (
-        <div className="sovlay-field">
-          <div className="osm-section-header">
-            <label className="sovlay-label" style={{ margin: 0 }}>Filtre de categories (opcional)</label>
-            {selectedCats.size > 0 && (
-              <button type="button" className="osm-toggle-btn" onClick={() => setSelectedCats(new Set())}>Netejar</button>
-            )}
-          </div>
-          <p className="sovlay-hint" style={{ marginTop: 4 }}>Sense selecció = importar totes les categories.</p>
-          <div className="osm-cat-grid">
-            {ALL_APP_CATEGORIES.map((cat) => (
-              <label key={cat.id} className="osm-cat-label">
-                <input type="checkbox" checked={selectedCats.has(cat.id)} onChange={() => toggleCat(cat.id)} />
-                <span className="osm-cat-dot" style={{ background: cat.color }} />
-                <span className="osm-cat-icon">{cat.icon}</span>
-                <span className="osm-cat-name">{cat.label}</span>
-              </label>
-            ))}
-          </div>
+          <button
+            type="button"
+            className={`poi-overture-mode-btn${mode === 'file' ? ' poi-overture-mode-btn--active' : ''}`}
+            onClick={() => setMode('file')}
+          >
+            Importar fitxer
+          </button>
         </div>
       )}
 
-      {geojsonText && (
-        <button type="button" className={`sovlay-calc-btn${loading ? ' sovlay-calc-btn--loading' : ''}`}
-          onClick={handleProcess} disabled={loading}>
-          {loading ? <><span className="sovlay-spinner" aria-hidden="true" /> Processant…</> : 'Processar fitxer'}
-        </button>
-      )}
+      {/* ── Mode API ── */}
+      {mode === 'api' && (
+        <>
+          {!API_CONFIGURED ? (
+            <p className="sovlay-hint sovlay-hint--warn">
+              <strong>VITE_API_BASE_URL</strong> no configurada.
+              Afig-la a <code>app/.env.local</code> per activar aquest mode.
+            </p>
+          ) : (
+            <>
+              <div className="sovlay-field">
+                <label className="sovlay-label">Zona de consulta</label>
+                {bbox ? (
+                  <p className="sovlay-hint">
+                    Viewport actual: {bbox.map((v) => v.toFixed(4)).join(', ')}
+                  </p>
+                ) : (
+                  <p className="sovlay-hint sovlay-hint--warn">No hi ha viewport. Mou el mapa primer.</p>
+                )}
+              </div>
 
-      {error && <p className="sovlay-error">{error}</p>}
+              <div className="sovlay-field">
+                <div className="poi-overture-params">
+                  <label className="poi-overture-param-row">
+                    <span>Confiança mínima</span>
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={minConfidence}
+                      onChange={(e) => setMinConfidence(Number(e.target.value))}
+                    />
+                    <span className="poi-size-val">{Math.round(minConfidence * 100)}%</span>
+                  </label>
+                  <label className="poi-overture-param-row">
+                    <span>Màxim de punts</span>
+                    <select
+                      className="poi-official-field-input"
+                      value={apiLimit}
+                      onChange={(e) => setApiLimit(Number(e.target.value))}
+                      style={{ width: 'auto' }}
+                    >
+                      {[1000, 2000, 5000, 10000].map((v) => (
+                        <option key={v} value={v}>{v.toLocaleString('ca')}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
 
-      {result && !loading && (
-        <div className="sovlay-results">
-          <div className="sovlay-results-hdr">
-            <h3 className="sovlay-results-title">
-              {result.features.length.toLocaleString('ca')} punts processats
-              {result.skipped > 0 && <span className="poi-skipped"> ({result.skipped} omesos)</span>}
-            </h3>
-            {result.features.length > 0 && (
-              <button type="button" className="sovlay-calc-btn" onClick={handleCreateLayer}
-                style={{ padding: '6px 16px', fontSize: '0.82rem' }}>
-                Crear capa
+              <button
+                type="button"
+                className={`sovlay-calc-btn${apiLoading ? ' sovlay-calc-btn--loading' : ''}`}
+                onClick={handleFetchApi}
+                disabled={apiLoading || !bbox}
+              >
+                {apiLoading
+                  ? <><span className="sovlay-spinner" aria-hidden="true" /> Consultant Overture…</>
+                  : 'Carregar POIs del viewport'}
               </button>
-            )}
-          </div>
-          {result.features.length === 0 && <p className="sovlay-hint">Cap punt vàlid trobat al fitxer.</p>}
-          {result.features.length > POI_COUNT_WARNING && (
-            <p className="sovlay-hint sovlay-hint--warn">Molts punts ({result.features.length.toLocaleString('ca')}). Considera filtrar per categories.</p>
+
+              {apiError && <p className="sovlay-error">{apiError}</p>}
+
+              {apiResult && !apiLoading && (
+                <div className="sovlay-results">
+                  <div className="sovlay-results-hdr">
+                    <h3 className="sovlay-results-title">
+                      {apiResult.features.length.toLocaleString('ca')} punts carregats
+                    </h3>
+                    {apiResult.features.length > 0 && (
+                      <button type="button" className="sovlay-calc-btn" onClick={handleCreateLayerApi}
+                        style={{ padding: '6px 16px', fontSize: '0.82rem' }}>
+                        Crear capa
+                      </button>
+                    )}
+                  </div>
+                  {apiResult.features.length === 0 && (
+                    <p className="sovlay-hint">Cap POI trobat per a aquest viewport i paràmetres.</p>
+                  )}
+                  {apiResult.features.length > POI_COUNT_WARNING && (
+                    <p className="sovlay-hint sovlay-hint--warn">
+                      Molts punts ({apiResult.features.length.toLocaleString('ca')}). El mapa pot anar lent.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </div>
+        </>
+      )}
+
+      {/* ── Mode fitxer ── */}
+      {mode === 'file' && (
+        <>
+          <div className="sovlay-field">
+            <label className="sovlay-label">Fitxer GeoJSON d'Overture</label>
+            <p className="sovlay-hint">
+              Exporta amb: <code>overturemaps download --bbox &lt;west,south,east,north&gt; -f geojson --type place -o places.geojson</code>
+            </p>
+            <div className="poi-file-row">
+              <button type="button" className="poi-file-btn" onClick={() => fileRef.current?.click()}>
+                Seleccionar fitxer…
+              </button>
+              <span className="poi-file-name">{fileName ?? 'Cap fitxer seleccionat'}</span>
+              <input ref={fileRef} type="file" accept=".geojson,.json" style={{ display: 'none' }} onChange={handleFileChange} />
+            </div>
+          </div>
+
+          {geojsonText && (
+            <div className="sovlay-field">
+              <div className="osm-section-header">
+                <label className="sovlay-label" style={{ margin: 0 }}>Filtre de categories (opcional)</label>
+                {selectedCats.size > 0 && (
+                  <button type="button" className="osm-toggle-btn" onClick={() => setSelectedCats(new Set())}>Netejar</button>
+                )}
+              </div>
+              <div className="osm-cat-grid">
+                {ALL_APP_CATEGORIES.map((cat) => (
+                  <label key={cat.id} className="osm-cat-label">
+                    <input type="checkbox" checked={selectedCats.has(cat.id)} onChange={() => toggleCat(cat.id)} />
+                    <span className="osm-cat-dot" style={{ background: cat.color }} />
+                    <span className="osm-cat-icon">{cat.icon}</span>
+                    <span className="osm-cat-name">{cat.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {geojsonText && (
+            <button type="button" className={`sovlay-calc-btn${fileLoading ? ' sovlay-calc-btn--loading' : ''}`}
+              onClick={handleProcessFile} disabled={fileLoading}>
+              {fileLoading ? <><span className="sovlay-spinner" aria-hidden="true" /> Processant…</> : 'Processar fitxer'}
+            </button>
+          )}
+
+          {fileError && <p className="sovlay-error">{fileError}</p>}
+
+          {fileResult && !fileLoading && (
+            <div className="sovlay-results">
+              <div className="sovlay-results-hdr">
+                <h3 className="sovlay-results-title">
+                  {fileResult.features.length.toLocaleString('ca')} punts processats
+                  {fileResult.skipped > 0 && <span className="poi-skipped"> ({fileResult.skipped} omesos)</span>}
+                </h3>
+                {fileResult.features.length > 0 && (
+                  <button type="button" className="sovlay-calc-btn" onClick={handleCreateLayerFile}
+                    style={{ padding: '6px 16px', fontSize: '0.82rem' }}>
+                    Crear capa
+                  </button>
+                )}
+              </div>
+              {fileResult.features.length === 0 && <p className="sovlay-hint">Cap punt vàlid trobat al fitxer.</p>}
+              {fileResult.features.length > POI_COUNT_WARNING && (
+                <p className="sovlay-hint sovlay-hint--warn">
+                  Molts punts ({fileResult.features.length.toLocaleString('ca')}). Considera filtrar per categories.
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       <div className="poi-overture-info">
-        <strong>Nota:</strong> Overture Maps conserva la taxonomia completa (basic_category, taxonomy.primary, taxonomy.hierarchy).
+        <strong>Overture Maps</strong> conserva la taxonomia completa (basic_category, taxonomy.primary, taxonomy.hierarchy).
         Disponible al popup, la taula de dades i l'exportació.
       </div>
     </>
@@ -479,7 +634,7 @@ export default function OsmPoiModal({ layers, mapViewport, onClose, onCreateLaye
             <OsmTab layers={layers} mapViewport={mapViewport} onCreateLayer={onCreateLayer} onClose={onClose} />
           )}
           {activeTab === 'overture' && (
-            <OvertureTab layers={layers} onCreateLayer={onCreateLayer} onClose={onClose} />
+            <OvertureTab mapViewport={mapViewport} onCreateLayer={onCreateLayer} onClose={onClose} />
           )}
           {activeTab === 'official' && (
             <OfficialTab onCreateLayer={onCreateLayer} onClose={onClose} />
