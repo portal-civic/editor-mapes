@@ -231,9 +231,8 @@ function OvertureTab({ mapViewport, onCreateLayer, onClose }) {
   const [minConfidence, setMinConfidence] = useState(0.6)
   const [apiLimit, setApiLimit] = useState(5000)
 
-  const bbox = mapViewport
-    ? [mapViewport.west, mapViewport.south, mapViewport.east, mapViewport.north]
-    : null
+  // mapViewport és [west, south, east, north] (array) des de MapCanvas/App.jsx
+  const bbox = Array.isArray(mapViewport) && mapViewport.length === 4 ? mapViewport : null
 
   const handleFetchApi = useCallback(async () => {
     if (!bbox) return
@@ -246,8 +245,14 @@ function OvertureTab({ mapViewport, onCreateLayer, onClose }) {
         bbox, limit: apiLimit, minConfidence, signal: controller.signal,
       })
       setApiResult(res)
+      if (import.meta.env.DEV) {
+        console.log('[OvertureTab] Resultat:', res.count, 'POIs, features:', res.features.length)
+      }
     } catch (err) {
-      if (err.name !== 'AbortError') setApiError(err.message)
+      if (err.name !== 'AbortError') {
+        console.error('[OvertureTab] Error:', err.message)
+        setApiError(err.message)
+      }
     } finally { setApiLoading(false) }
   }, [bbox, apiLimit, minConfidence])
 
@@ -338,10 +343,10 @@ function OvertureTab({ mapViewport, onCreateLayer, onClose }) {
                 <label className="sovlay-label">Zona de consulta</label>
                 {bbox ? (
                   <p className="sovlay-hint">
-                    Viewport actual: {bbox.map((v) => v.toFixed(4)).join(', ')}
+                    Viewport: W {bbox[0].toFixed(4)}, S {bbox[1].toFixed(4)}, E {bbox[2].toFixed(4)}, N {bbox[3].toFixed(4)}
                   </p>
                 ) : (
-                  <p className="sovlay-hint sovlay-hint--warn">No hi ha viewport. Mou el mapa primer.</p>
+                  <p className="sovlay-hint sovlay-hint--warn">No hi ha viewport. Mou el mapa primer i torna a obrir el diàleg.</p>
                 )}
               </div>
 

@@ -3,12 +3,13 @@
  *
  * Connector per a Overture Maps Places.
  *
- * Com que Overture no té una API pública gratuïta per a consultes per bbox,
- * aquest connector carrega un GeoJSON local pre-exportat amb:
+ * Mode principal: consulta al backend Node/Express (VITE_API_BASE_URL) via
+ *   fetchOverturePoisByBbox({ bbox, limit, minConfidence })
  *
- *   overturemaps download --bbox <west,south,east,north> -f geojson --type places -o places.geojson
+ * Mode avançat: importació de GeoJSON local exportat amb:
+ *   overturemaps download --bbox <west,south,east,north> -f geojson --type place -o places.geojson
  *
- * La interfície `fetchByBbox` és un stub per a ús futur quan existeixi un backend.
+ * Backend: https://editor-mapes.onrender.com
  *
  * Propietats generades en cada feature normalitzada:
  *   poi_source:              'overture'
@@ -242,6 +243,8 @@ export function loadOvertureGeoJson(geojsonText, catFilter = null) {
  * Reconstruïm un "props" compatible amb classifyOvertureFeature.
  */
 export function backendPoiToFeature(poi) {
+  if (typeof poi.latitude !== 'number' || typeof poi.longitude !== 'number') return null
+
   const fakeProps = {
     basic_category: poi.overtureBasicCategory,
     taxonomy: {
@@ -294,7 +297,8 @@ export function backendPoiToFeature(poi) {
 
 // ─── Crida al backend per bbox ────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const DEV = import.meta.env.DEV
 
 /**
  * Consulta el backend Node/Express per obtenir Overture Places dins un bbox.
@@ -305,30 +309,57 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 export async function fetchOverturePoisByBbox({ bbox, limit = 5000, minConfidence = 0.6, signal } = {}) {
   if (!API_BASE) {
     throw new Error(
-      'VITE_API_BASE_URL no està configurada. Afig-la a .env.local (ex. http://localhost:3000).',
+      'VITE_API_BASE_URL no està configurada. Afig-la a app/.env.local\n' +
+      'Exemple: VITE_API_BASE_URL=https://editor-mapes.onrender.com',
     )
   }
 
   const [west, south, east, north] = bbox
+  const bboxStr = `${west},${south},${east},${north}`
+
   const url = new URL(`${API_BASE}/api/poi/overture`)
-  url.searchParams.set('bbox', `${west},${south},${east},${north}`)
+  url.searchParams.set('bbox', bboxStr)
   url.searchParams.set('limit', String(limit))
   if (minConfidence != null) url.searchParams.set('minConfidence', String(minConfidence))
 
-  const resp = await fetch(url.toString(), { signal })
+  const urlStr = url.toString()
+  if (DEV) {
+    console.log('[Overture] Fetch →', urlStr)
+    console.log('[Overture] bbox:', bboxStr, '| limit:', limit, '| minConfidence:', minConfidence)
+  }
+
+  let resp
+  try {
+    resp = await fetch(urlStr, { signal })
+  } catch (netErr) {
+    const msg = `No s'ha pogut connectar amb el backend (${API_BASE}): ${netErr.message}`
+    if (DEV) console.error('[Overture] Network error:', netErr)
+    throw new Error(msg)
+  }
+
   if (!resp.ok) {
-    let msg = `Error del servidor: ${resp.status}`
+    let msg = `Error del servidor: HTTP ${resp.status}`
     try {
       const body = await resp.json()
       if (body?.error) msg = body.error
     } catch { /* ignore */ }
+    if (DEV) console.error('[Overture] Server error:', resp.status, msg)
     const err = new Error(msg)
     err.status = resp.status
     throw err
   }
 
   const data = await resp.json()
+  if (DEV) {
+    console.log('[Overture] Resposta: count =', data.count, '| pois.length =', data.pois?.length)
+  }
+
   const features = (data.pois ?? []).map((poi, i) => backendPoiToFeature(poi, i)).filter(Boolean)
+
+  if (DEV) {
+    console.log('[Overture] Features generades:', features.length)
+    if (features.length > 0) console.log('[Overture] Exemple feature[0]:', features[0])
+  }
 
   return { features, count: data.count ?? features.length }
 }
