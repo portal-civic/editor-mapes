@@ -15,8 +15,33 @@ import {
   OSM_SUBCATEGORY_BY_ID,
   getSubcategoriesForCategory,
 } from './osmPoiCategories'
+import {
+  APP_CATEGORIES,
+  APP_CATEGORY_BY_ID,
+  OVERTURE_POI_SUBCATEGORIES,
+  OVERTURE_SUBCAT_BY_ID,
+} from '../poi/appCategoryRegistry'
 import { normalizeCategory } from '../sources/categoricalStyle'
 import { getPoiTablerIcon } from '../symbols/poiIconMap'
+
+// ─── Registre unificat: OSM + Overture + Altres ───────────────────────────────
+// Usem el registre unificat per a lookup de categories que no existeixen a OSM.
+
+function resolveCategory(catId) {
+  return OSM_CATEGORY_BY_ID[catId] ?? APP_CATEGORY_BY_ID[catId] ?? null
+}
+
+function resolveSubcategory(subcatId) {
+  return OSM_SUBCATEGORY_BY_ID[subcatId] ?? OVERTURE_SUBCAT_BY_ID[subcatId] ?? null
+}
+
+function getUnifiedTablerIcon(subcatId) {
+  // Primer intenta l'iconMap OSM, si no usa el tablerIcon del registre unificat
+  const osmIcon = getPoiTablerIcon(subcatId)
+  if (osmIcon !== 'map-pin') return osmIcon // map-pin és el fallback d'OSM
+  const subDef = OVERTURE_SUBCAT_BY_ID[subcatId]
+  return subDef?.tablerIcon ?? 'map-pin'
+}
 
 /** Build the default markerStyle for a subcategory (Tabler icon + colour). */
 function subcatMarkerStyle(sub) {
@@ -53,24 +78,51 @@ function catMarkerStyle(cat) {
  */
 export function buildPoiCategoricalConfig(features, displayMode = 'subcategory') {
   if (displayMode === 'subcategory') {
-    // Collect the subcategory IDs that actually appear in the data,
-    // preserving the canonical order from osmPoiCategories.
     const present = new Set(
       features.map((f) => f?.properties?.poi_subcategory).filter(Boolean),
     )
-    const categories = OSM_POI_SUBCATEGORIES
-      .filter((sub) => present.has(sub.id))
-      .map((sub, i) =>
-        normalizeCategory({
-          value: sub.id,
-          label: sub.label,
-          color: sub.color,
-          icon: null,             // emoji not used by default
-          markerStyle: subcatMarkerStyle(sub),
-          visible: true,
-          legendOrder: i,
-        }),
-      )
+
+    // Construir des del registre unificat (OSM + Overture) en ordre canònic
+    const ALL_SUBCATS = [...OSM_POI_SUBCATEGORIES, ...OVERTURE_POI_SUBCATEGORIES]
+    const seen = new Set()
+    const categories = []
+
+    for (const sub of ALL_SUBCATS) {
+      if (!present.has(sub.id) || seen.has(sub.id)) continue
+      seen.add(sub.id)
+      categories.push(normalizeCategory({
+        value: sub.id,
+        label: sub.label,
+        color: sub.color,
+        icon: null,
+        markerStyle: {
+          iconSet: 'tabler',
+          icon: getUnifiedTablerIcon(sub.id),
+          size: 22,
+          fillColor: sub.color,
+          iconColor: '#ffffff',
+          strokeColor: sub.color,
+          strokeWidth: 0,
+        },
+        visible: true,
+        legendOrder: categories.length,
+      }))
+    }
+
+    // Subcategories no trobades al registre (IDs desconeguts) — afegir-les al final
+    for (const id of present) {
+      if (seen.has(id)) continue
+      categories.push(normalizeCategory({
+        value: id,
+        label: id,
+        color: '#94a3b8',
+        icon: null,
+        markerStyle: { iconSet: 'tabler', icon: 'map-pin', size: 22, fillColor: '#94a3b8', iconColor: '#ffffff', strokeColor: '#94a3b8', strokeWidth: 0 },
+        visible: true,
+        legendOrder: categories.length,
+      }))
+    }
+
     return { field: 'poi_subcategory', categories }
   }
 
@@ -78,19 +130,48 @@ export function buildPoiCategoricalConfig(features, displayMode = 'subcategory')
   const present = new Set(
     features.map((f) => f?.properties?.poi_category).filter(Boolean),
   )
-  const categories = OSM_POI_CATEGORIES
-    .filter((cat) => present.has(cat.id))
-    .map((cat, i) =>
-      normalizeCategory({
-        value: cat.id,
-        label: cat.label,
-        color: cat.color,
-        icon: null,
-        markerStyle: catMarkerStyle(cat),
-        visible: true,
-        legendOrder: i,
-      }),
-    )
+
+  // Registre unificat de categories (OSM + app categories)
+  const ALL_CATS = [...OSM_POI_CATEGORIES, ...APP_CATEGORIES.filter((c) => !OSM_CATEGORY_BY_ID[c.id])]
+  const seen = new Set()
+  const categories = []
+
+  for (const cat of ALL_CATS) {
+    if (!present.has(cat.id) || seen.has(cat.id)) continue
+    seen.add(cat.id)
+    categories.push(normalizeCategory({
+      value: cat.id,
+      label: cat.label,
+      color: cat.color,
+      icon: null,
+      markerStyle: {
+        iconSet: 'tabler',
+        icon: cat.tablerIcon ?? 'map-pin',
+        size: 22,
+        fillColor: cat.color,
+        iconColor: '#ffffff',
+        strokeColor: cat.color,
+        strokeWidth: 0,
+      },
+      visible: true,
+      legendOrder: categories.length,
+    }))
+  }
+
+  // Categories no trobades al registre
+  for (const id of present) {
+    if (seen.has(id)) continue
+    categories.push(normalizeCategory({
+      value: id,
+      label: id,
+      color: '#94a3b8',
+      icon: null,
+      markerStyle: { iconSet: 'tabler', icon: 'map-pin', size: 22, fillColor: '#94a3b8', iconColor: '#ffffff', strokeColor: '#94a3b8', strokeWidth: 0 },
+      visible: true,
+      legendOrder: categories.length,
+    }))
+  }
+
   return { field: 'poi_category', categories }
 }
 
@@ -140,7 +221,7 @@ export function getPoiHiddenLegendValues(layer) {
 export function applyPoiMarkerStyleToCategories(categories, mode, displayMode = 'subcategory') {
   return categories.map((cat) => {
     if (mode === 'tabler') {
-      const iconId = getPoiTablerIcon(cat.value)
+      const iconId = getUnifiedTablerIcon(cat.value)
       return {
         ...cat,
         icon: null,
@@ -158,8 +239,8 @@ export function applyPoiMarkerStyleToCategories(categories, mode, displayMode = 
 
     if (mode === 'emoji') {
       const def = displayMode === 'subcategory'
-        ? OSM_SUBCATEGORY_BY_ID[cat.value]
-        : OSM_CATEGORY_BY_ID[cat.value]
+        ? (resolveSubcategory(cat.value))
+        : (resolveCategory(cat.value))
       const emojiIcon = def?.icon ?? cat.icon ?? null
       return {
         ...cat,

@@ -317,6 +317,11 @@ function getLayerRenderSignature(layer) {
     base = `${base}:ov:${ovStr}`
   }
 
+  // ── POI global overrides (size + icon color) ──
+  if (layer.poiConfig) {
+    base = `${base}:poi:${layer.poiConfig.markerSize ?? ''}:${layer.poiConfig.iconColor ?? ''}`
+  }
+
   // ── POI subcategory visibility ──
   const pv = layer.poiVisibility
   if (pv?.subcategories) {
@@ -362,12 +367,12 @@ function applyFeatureOverride(baseStyle, override, geometryType) {
  * rendered inside a coloured SVG circle.  Mirrors createPointIcon() but for
  * source-layer categorical categories (no selection ring needed).
  */
-function makeCatTablerIcon(cat) {
+function makeCatTablerIcon(cat, sizeOverride = null, iconColorOverride = null) {
   const ms = cat.markerStyle ?? {}
-  const size    = ms.size ?? 22
+  const size    = sizeOverride ?? ms.size ?? 22
   const radius  = size / 2
   const fill    = ms.fillColor ?? cat.color ?? '#64748b'
-  const iColor  = ms.iconColor ?? '#ffffff'
+  const iColor  = ms.iconColor ?? iconColorOverride ?? '#ffffff'
   const stroke  = ms.strokeColor ?? fill
   const sWidth  = ms.strokeWidth ?? 0
   const iconId  = ms.icon ?? 'map-pin'
@@ -574,19 +579,25 @@ function SourceLayerRenderer({ layer, pane }) {
         const key = val == null ? '__null__' : String(val)
         const cat = categoryMap.get(key)
 
+        // Global overrides from poiConfig (size + icon color)
+        const poiSize = layer.poiConfig?.markerSize ?? null
+        const poiIconColor = layer.poiConfig?.iconColor ?? null
+
         if (cat?.markerStyle) {
           const ms = cat.markerStyle
           if (ms.iconSet === 'tabler' && ms.icon) {
-            return L.marker(latlng, { icon: makeCatTablerIcon(cat) })
+            return L.marker(latlng, { icon: makeCatTablerIcon(cat, poiSize, poiIconColor) })
           }
           if ((ms.iconSet === 'emoji') && ms.icon) {
             const color = ms.fillColor ?? cat.color ?? '#64748b'
+            const sz = poiSize ?? 28
+            const emojiSize = Math.round(sz * 0.5)
             return L.marker(latlng, {
               icon: L.divIcon({
-                html: `<div class="poi-map-marker" style="--poi-bg:${color}"><span class="poi-map-icon">${ms.icon}</span></div>`,
+                html: `<div class="poi-map-marker" style="--poi-bg:${color};width:${sz}px;height:${sz}px"><span class="poi-map-icon" style="font-size:${emojiSize}px">${ms.icon}</span></div>`,
                 className: '',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
+                iconSize: [sz, sz],
+                iconAnchor: [sz / 2, sz / 2],
               }),
             })
           }
@@ -594,12 +605,14 @@ function SourceLayerRenderer({ layer, pane }) {
         } else if (cat?.icon) {
           // Legacy: category has emoji icon but no markerStyle (old saved projects)
           const color = cat.color ?? '#64748b'
+          const sz = poiSize ?? 28
+          const emojiSize = Math.round(sz * 0.5)
           return L.marker(latlng, {
             icon: L.divIcon({
-              html: `<div class="poi-map-marker" style="--poi-bg:${color}"><span class="poi-map-icon">${cat.icon}</span></div>`,
+              html: `<div class="poi-map-marker" style="--poi-bg:${color};width:${sz}px;height:${sz}px"><span class="poi-map-icon" style="font-size:${emojiSize}px">${cat.icon}</span></div>`,
               className: '',
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
+              iconSize: [sz, sz],
+              iconAnchor: [sz / 2, sz / 2],
             }),
           })
         }

@@ -786,6 +786,7 @@ function LayerInspector({
   onPoiVisibilityChange,
   onPoiDisplayModeChange,
   onPoiApplyMarkerStyle,
+  onPoiConfigChange,
   onOpenFilterModal,
   onOpenDataTable,
   panelExpanded = false,
@@ -955,7 +956,7 @@ function LayerInspector({
         {/* ═══ ESTIL ════════════════════════════════════════════════════════ */}
         {activeTab === 'estil' && (
           <div className="insp-tab-content">
-            {layer.type === 'source' ? (
+            {layer.type === 'source' && layer.poiConfig == null ? (
               <label>
                 Mode d'estil
                 <select
@@ -966,6 +967,77 @@ function LayerInspector({
                   <option value="categorical">Per atribut</option>
                 </select>
               </label>
+            ) : null}
+
+            {/* ── POI simbologia panel ────────────────────────────── */}
+            {layer.poiConfig != null ? (
+              <div className="poi-estil-panel">
+                <div className="poi-estil-heading">Simbologia</div>
+
+                <InspectorField label="Visualitzar per">
+                  <select
+                    className="poi-display-mode-select"
+                    value={layer.poiConfig.displayMode ?? 'subcategory'}
+                    onChange={(e) => onPoiDisplayModeChange?.(layer.id, e.target.value)}
+                  >
+                    <option value="subcategory">Subcategoria</option>
+                    <option value="category">Categoria</option>
+                  </select>
+                </InspectorField>
+
+                <div className="poi-estil-presets">
+                  <span className="poi-estil-presets-label">Preset ràpid</span>
+                  <div className="poi-symbol-actions-btns">
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Cercles amb icones vectorials Tabler"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'tabler')}
+                    >
+                      ⊙ Icones
+                    </button>
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Cercles amb emoji de cada categoria"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'emoji')}
+                    >
+                      😀 Emojis
+                    </button>
+                    <button
+                      type="button"
+                      className="poi-symbol-btn"
+                      title="Cercle de color simple"
+                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'circle')}
+                    >
+                      ● Cercle
+                    </button>
+                  </div>
+                </div>
+
+                <InspectorDivider />
+
+                <InspectorField label="Mida marcador">
+                  <input
+                    type="range" min="12" max="48" step="2"
+                    className="poi-size-slider"
+                    value={layer.poiConfig.markerSize ?? 24}
+                    onChange={(e) => onPoiConfigChange?.(layer.id, { markerSize: Number(e.target.value) })}
+                  />
+                  <span className="poi-size-val">{layer.poiConfig.markerSize ?? 24}px</span>
+                </InspectorField>
+
+                <InspectorField label="Color icona">
+                  <input
+                    type="color"
+                    value={layer.poiConfig.iconColor ?? '#ffffff'}
+                    onChange={(e) => onPoiConfigChange?.(layer.id, { iconColor: e.target.value })}
+                    title="Color de la icona (per a marcadors vectorials i cercles amb icona)"
+                  />
+                </InspectorField>
+
+                <InspectorDivider />
+              </div>
             ) : null}
 
             {layer.styleMode === 'categorical' ? (
@@ -1291,61 +1363,7 @@ function LayerInspector({
             ) : null}
 
             {layer.poiConfig != null ? (
-              <div className="poi-filters-section">
-                <div className="poi-display-mode-row">
-                  <span className="poi-display-mode-label">Visualitzar per</span>
-                  <select
-                    className="poi-display-mode-select"
-                    value={layer.poiConfig.displayMode ?? 'category'}
-                    onChange={(e) => onPoiDisplayModeChange?.(layer.id, e.target.value)}
-                  >
-                    <option value="subcategory">Subcategoria</option>
-                    <option value="category">Categoria</option>
-                  </select>
-                </div>
-                {!layer.poiConfig.displayMode && (
-                  <div className="poi-migrate-notice">
-                    <p>Capa antiga — actualitza a subcategories per millorar colors i llegenda.</p>
-                    <button
-                      type="button"
-                      className="poi-migrate-btn"
-                      onClick={() => onPoiDisplayModeChange?.(layer.id, 'subcategory')}
-                    >
-                      Usar subcategories
-                    </button>
-                  </div>
-                )}
-                <div className="poi-symbol-actions">
-                  <span className="poi-symbol-actions-label">Simbologia ràpida</span>
-                  <div className="poi-symbol-actions-btns">
-                    <button
-                      type="button"
-                      className="poi-symbol-btn"
-                      title="Cercles de color amb icones vectorials professionals"
-                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'tabler')}
-                    >
-                      Icones vectorials
-                    </button>
-                    <button
-                      type="button"
-                      className="poi-symbol-btn"
-                      title="Icones emoji de les categories"
-                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'emoji')}
-                    >
-                      Emojis
-                    </button>
-                    <button
-                      type="button"
-                      className="poi-symbol-btn"
-                      title="Cercle de color simple sense icona"
-                      onClick={() => onPoiApplyMarkerStyle?.(layer.id, 'circle')}
-                    >
-                      Cercle
-                    </button>
-                  </div>
-                </div>
-                <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
-              </div>
+              <PoiFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
             ) : null}
 
             {layer.type !== 'source' && layer.poiConfig == null ? (

@@ -116,7 +116,15 @@ export function buildLegendEntry(layer, options = {}) {
         }
       }
 
-      return { label, geometryType: geom, style, icon: cat.icon ?? null, markerStyle: cat.markerStyle ?? null }
+      // Merge global poiConfig.iconColor as fallback (per-cat markerStyle takes priority)
+      const globalIconColor = layer.poiConfig?.iconColor ?? null
+      const effectiveMarkerStyle = cat.markerStyle
+        ? (globalIconColor && !cat.markerStyle.iconColor)
+          ? { ...cat.markerStyle, iconColor: globalIconColor }
+          : cat.markerStyle
+        : null
+
+      return { label, geometryType: geom, style, icon: cat.icon ?? null, markerStyle: effectiveMarkerStyle }
     })
 
     // "Altres" group: summarises categories below the count threshold

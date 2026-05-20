@@ -6317,6 +6317,34 @@ button.primary {
 
 .poi-migrate-btn:hover { background: #d97706; }
 
+/* ── POI Estil panel (in Estil tab) ─────────────────────────────────────────── */
+
+.poi-estil-panel {
+  padding: 0 0 4px;
+}
+
+.poi-estil-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.poi-estil-presets {
+  padding: 4px 12px 8px;
+}
+
+.poi-estil-presets-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
 /* ── POI quick symbol actions ───────────────────────────────────────────────── */
 
 .poi-symbol-actions {
@@ -6358,6 +6386,37 @@ button.primary {
   background: #dbeafe;
   border-color: #93c5fd;
   color: #1e40af;
+}
+
+/* ── POI marker size row ───────────────────────────────────────────────────── */
+
+.poi-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.poi-size-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.poi-size-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.poi-size-val {
+  font-size: 11px;
+  color: var(--text-primary);
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── POI map marker (emoji icon inside coloured circle) ─────────────────────── */
@@ -7382,17 +7441,22 @@ button.primary {
 
 /* ── Data Table Panel ──────────────────────────────────────────────────────── */
 
+/* Second grid row appears when data table is open */
+.workspace--has-table {
+  grid-template-rows: 1fr var(--dt-height, 300px);
+}
+
 .dt-panel {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 300;
+  /* Grid item: spans all 3 columns in row 2 */
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   background: var(--surface-base);
   border-top: 2px solid var(--border-strong);
-  box-shadow: 0 -4px 20px rgba(15, 34, 56, 0.16);
+  box-shadow: 0 -2px 12px rgba(15, 34, 56, 0.10);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dt-resize-handle {
@@ -7600,4 +7664,293 @@ button.primary {
 
 .dt-rows-wrap {
   display: block;
+}
+
+/* ── POI Multi-source Modal ────────────────────────────────────────────────── */
+
+.osm-modal--wide {
+  width: min(780px, 96vw);
+}
+
+.poi-modal-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0;
+}
+
+.poi-modal-tab {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.poi-modal-tab:hover { color: #1e293b; }
+.poi-modal-tab--active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+
+/* ── File picker row ────────────────────────────────────────────────────────── */
+
+.poi-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.poi-file-btn {
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.poi-file-btn:hover { background: #e2e8f0; }
+
+.poi-file-name {
+  font-size: 0.78rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poi-skipped {
+  font-size: 0.78rem;
+  color: #f59e0b;
+  margin-left: 4px;
+}
+
+.poi-overture-info {
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+  font-size: 0.77rem;
+  color: #1d4ed8;
+  line-height: 1.5;
+}
+
+/* ── Official GeoJSON field config ──────────────────────────────────────────── */
+
+.poi-official-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.poi-official-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.poi-official-field-label {
+  width: 190px;
+  font-size: 0.78rem;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.poi-official-field-input {
+  flex: 1;
+  padding: 4px 7px;
+  font-size: 0.78rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #1e293b;
+}
+.poi-official-field-input:focus { outline: none; border-color: #60a5fa; }
+
+/* ── POI Source badge ───────────────────────────────────────────────────────── */
+
+.poi-source-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+/* ── POI Card title row ─────────────────────────────────────────────────────── */
+
+.poi-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Overture taxonomy section ──────────────────────────────────────────────── */
+
+.poi-overture-section {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+}
+
+.poi-overture-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #0369a1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.poi-overture-hierarchy {
+  font-size: 0.78rem;
+  color: #1e293b;
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+
+.poi-hier-level {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.73rem;
+}
+
+.poi-hier-level--0 { background: #0c4a6e; color: #fff; }
+.poi-hier-level--1 { background: #0369a1; color: #fff; }
+.poi-hier-level--2 { background: #0ea5e9; color: #fff; }
+.poi-hier-level--3 { background: #bae6fd; color: #0c4a6e; }
+
+.poi-hier-sep { color: #94a3b8; font-size: 0.7rem; margin: 0 2px; }
+
+.poi-overture-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.75rem;
+  margin-bottom: 3px;
+}
+
+.poi-overture-key {
+  width: 120px;
+  flex-shrink: 0;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.poi-overture-val {
+  color: #1e293b;
+  flex: 1;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Confidence bar */
+.poi-confidence-bar {
+  display: inline-flex;
+  width: 60px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.poi-confidence-fill {
+  width: calc(var(--conf) * 100%);
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  border-radius: 3px;
+}
+
+/* Operating status */
+.poi-status {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.poi-status--open { background: #dcfce7; color: #166534; }
+.poi-status--closed { background: #fee2e2; color: #991b1b; }
+.poi-status--temporarily_closed { background: #fef9c3; color: #854d0e; }
+
+/* ── Overture filter panel (PoiFilterPanel) ─────────────────────────────────── */
+
+.poi-overture-filter {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+}
+
+.poi-overture-filter-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0369a1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.poi-ofilter-section {
+  margin-bottom: 8px;
+}
+
+.poi-ofilter-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.poi-ofilter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.poi-ofilter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  color: #0369a1;
+  cursor: default;
+}
+
+.poi-ofilter-chip-count {
+  background: #0369a1;
+  color: #fff;
+  border-radius: 99px;
+  padding: 0 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.poi-ofilter-more {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-style: italic;
+  align-self: center;
 }

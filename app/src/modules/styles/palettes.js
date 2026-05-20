@@ -7,6 +7,23 @@ export const PALETTES = {
       '#b5179e', '#4cc9f0',
     ],
   },
+  diverse: {
+    name: 'Divers (20 colors)',
+    colors: [
+      '#e63946', '#2a9d8f', '#e9c46a', '#4361ee', '#f77f00',
+      '#9b5de5', '#06d6a0', '#f72585', '#118ab2', '#8cb369',
+      '#3a0ca3', '#fb5607', '#4cc9f0', '#d62828', '#52b788',
+      '#7b2d8b', '#ffd166', '#023e8a', '#c9184a', '#43aa8b',
+    ],
+  },
+  vivid: {
+    name: 'Vívid',
+    colors: [
+      '#ff595e', '#ffca3a', '#6a4c93', '#1982c4', '#8ac926',
+      '#ff924c', '#c77dff', '#45b7d1', '#f72585', '#4cc9f0',
+      '#b5e48c', '#d62828',
+    ],
+  },
   urbana: {
     name: 'Agenda Urbana',
     colors: [
@@ -33,4 +50,4 @@ export const PALETTES = {
   },
 }
 
-export const PALETTE_ORDER = ['default', 'urbana', 'diagnostic', 'contrast']
+export const PALETTE_ORDER = ['default', 'diverse', 'vivid', 'urbana', 'diagnostic', 'contrast']

@@ -1,6 +1,44 @@
 import { getDatasetFeatures } from './sourceStore.js'
 import { PALETTES, PALETTE_ORDER } from '../styles/palettes.js'
 
+// ─── Perceptual color generation ─────────────────────────────────────────────
+// Uses golden-ratio hue spacing + alternating lightness for maximum distinction
+// between large numbers of categories.
+
+function hslToHex(h, s, l) {
+  // h: 0–360, s: 0–1, l: 0–1
+  const k = (n) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  const hex = (x) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return `#${hex(f(0))}${hex(f(8))}${hex(f(4))}`
+}
+
+// Pre-calculated golden-ratio hue sequence for n colors.
+// Alternates through 5 lightness levels to maximise visual distinction
+// (not just hue but also luminance contrast).
+const PHI = 0.618033988749895
+const LIGHTNESS_CYCLE = [0.50, 0.65, 0.38, 0.72, 0.44]
+
+export function generateDistinctColors(n, startHue = 0.1, saturation = 0.72) {
+  const result = []
+  let h = startHue
+  for (let i = 0; i < n; i++) {
+    const l = LIGHTNESS_CYCLE[i % LIGHTNESS_CYCLE.length]
+    result.push(hslToHex(h * 360, saturation, l))
+    h = (h + PHI) % 1
+  }
+  return result
+}
+
+// Extend a base palette to n colours, appending golden-ratio colours that are
+// visually distinct from the palette's existing last colour's hue.
+function extendPalette(base, n) {
+  if (n <= base.length) return base.slice(0, n)
+  const extra = generateDistinctColors(n - base.length)
+  return [...base, ...extra]
+}
+
 // ─── Category model normalization ─────────────────────────────────────────────
 
 export function normalizeCategory(cat, index) {
@@ -70,11 +108,13 @@ export function generateCategoriesFromDataset(datasetId, field, paletteId = 'def
 
   const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
 
+  const colors = extendPalette(palette, sorted.length)
+
   return sorted.map(([key, count], i) => ({
     value: key === '__null__' ? null : key,
     label: key === '__null__' ? '(buit)' : key,
     description: '',
-    color: palette[i % palette.length],
+    color: colors[i],
     fillColor: null,
     strokeColor: null,
     visible: true,
@@ -90,9 +130,10 @@ export function applyPaletteToCategories(categories, paletteId, invert = false, 
   const resolved = paletteMap ?? PALETTES
   const base = resolved[paletteId]?.colors ?? PALETTES.default.colors
   const palette = invert ? [...base].reverse() : base
+  const colors = extendPalette(palette, categories.length)
   return categories.map((cat, i) => ({
     ...normalizeCategory(cat, i),
-    color: palette[i % palette.length],
+    color: colors[i],
     fillColor: null,
     strokeColor: null,
   }))

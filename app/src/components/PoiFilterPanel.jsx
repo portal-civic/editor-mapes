@@ -4,6 +4,13 @@ import {
   OSM_POI_SUBCATEGORIES,
   getSubcategoriesForCategory,
 } from '../modules/osm/osmPoiCategories'
+import {
+  APP_CATEGORIES,
+  APP_CATEGORY_BY_ID,
+  OVERTURE_POI_SUBCATEGORIES,
+  getOvertureSubcatsForCategory,
+} from '../modules/poi/appCategoryRegistry'
+import { overtureMatchesHierarchyFilter } from '../modules/poi/overtureTaxonomy'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 import { isPoiFeatureVisible } from '../modules/osm/poiVisibility'
 
@@ -92,6 +99,94 @@ function CategoryRow({
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
+
+// ── Overture advanced filter panel ───────────────────────────────────────────
+
+function OvertureFilterPanel({ layer, onPoiVisibilityChange }) {
+  const [hierarchySearch, setHierarchySearch] = useState('')
+
+  const isOverture = layer.poiConfig?.sourceType === 'overture'
+  if (!isOverture) return null
+
+  // Recull els basic_category únics presents a les dades
+  const features = useMemo(() => getDatasetFeatures(layer.datasetId) ?? [], [layer.datasetId])
+
+  const uniqueBasicCats = useMemo(() => {
+    const set = new Set()
+    for (const f of features) {
+      const bc = f.properties?.overture_basic_category
+      if (bc) set.add(bc)
+    }
+    return Array.from(set).sort()
+  }, [features])
+
+  const hierarchyTerms = useMemo(() => {
+    const set = new Set()
+    for (const f of features) {
+      const arr = (() => {
+        try { return JSON.parse(f.properties?.overture_hierarchy_arr ?? 'null') } catch { return null }
+      })()
+      if (Array.isArray(arr)) arr.forEach((t) => set.add(t))
+    }
+    return Array.from(set).sort()
+  }, [features])
+
+  const filteredTerms = hierarchySearch
+    ? hierarchyTerms.filter((t) => t.toLowerCase().includes(hierarchySearch.toLowerCase()))
+    : hierarchyTerms.slice(0, 50)
+
+  return (
+    <div className="poi-overture-filter">
+      <div className="poi-overture-filter-title">Filtres avançats Overture</div>
+
+      {uniqueBasicCats.length > 0 && (
+        <div className="poi-ofilter-section">
+          <div className="poi-ofilter-label">basic_category ({uniqueBasicCats.length})</div>
+          <div className="poi-ofilter-chips">
+            {uniqueBasicCats.map((bc) => {
+              const count = features.filter((f) => f.properties?.overture_basic_category === bc).length
+              return (
+                <span key={bc} className="poi-ofilter-chip" title={`${count} punts`}>
+                  {bc}
+                  <span className="poi-ofilter-chip-count">{count}</span>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {hierarchyTerms.length > 0 && (
+        <div className="poi-ofilter-section">
+          <div className="poi-ofilter-label">taxonomy.hierarchy ({hierarchyTerms.length} termes)</div>
+          <input
+            type="text"
+            className="poi-filter-search"
+            placeholder="Buscar terme de jerarquia…"
+            value={hierarchySearch}
+            onChange={(e) => setHierarchySearch(e.target.value)}
+          />
+          <div className="poi-ofilter-chips">
+            {filteredTerms.map((term) => {
+              const count = features.filter((f) => overtureMatchesHierarchyFilter(f.properties ?? {}, term)).length
+              return (
+                <span key={term} className="poi-ofilter-chip" title={`${count} punts`}>
+                  {term}
+                  <span className="poi-ofilter-chip-count">{count}</span>
+                </span>
+              )
+            })}
+            {!hierarchySearch && hierarchyTerms.length > 50 && (
+              <span className="poi-ofilter-more">+{hierarchyTerms.length - 50} més (cerca per filtrar)</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main PoiFilterPanel ───────────────────────────────────────────────────────
 
 export default function PoiFilterPanel({ layer, onPoiVisibilityChange }) {
   const [search, setSearch] = useState('')
@@ -206,6 +301,8 @@ export default function PoiFilterPanel({ layer, onPoiVisibilityChange }) {
           })
         )}
       </div>
+
+      <OvertureFilterPanel layer={layer} onPoiVisibilityChange={onPoiVisibilityChange} />
     </div>
   )
 }

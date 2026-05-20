@@ -24,11 +24,11 @@ export const OSM_POI_SUBCATEGORIES = [
     tags: [{ key: 'amenity', value: 'health_centre' }, { key: 'amenity', value: 'doctors' }] },
   { id: 'health_clinic',    categoryId: 'health', label: 'Clíniques',        icon: '🏨', color: '#f97316',
     tags: [{ key: 'amenity', value: 'clinic' }] },
-  { id: 'health_pharmacy',  categoryId: 'health', label: 'Farmàcies',        icon: '💊', color: '#22c55e',
+  { id: 'health_pharmacy',  categoryId: 'health', label: 'Farmàcies',        icon: '💊', color: '#e879a0',
     tags: [{ key: 'amenity', value: 'pharmacy' }] },
   { id: 'health_dentist',   categoryId: 'health', label: 'Dentistes',        icon: '🦷', color: '#64748b',
     tags: [{ key: 'amenity', value: 'dentist' }] },
-  { id: 'health_vet',       categoryId: 'health', label: 'Veterinaris',      icon: '🐾', color: '#92400e',
+  { id: 'health_vet',       categoryId: 'health', label: 'Veterinaris',      icon: '🐾', color: '#c084a0',
     tags: [{ key: 'amenity', value: 'veterinary' }] },
 
   // ── Educació ───────────────────────────────────────────────────────────────

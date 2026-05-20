@@ -45,6 +45,76 @@ function PoiField({ label, value, isLink }) {
   )
 }
 
+const POI_SYNTHETIC_KEYS = new Set([
+  'poi_category', 'poi_category_label', 'poi_subcategory', 'poi_subcategory_label',
+  'poi_source', 'poi_id', 'poi_icon', 'poi_color',
+  'osm_type', 'osm_id', 'name', 'address', 'phone', 'website', 'operator',
+])
+
+function PoiSourceBadge({ source }) {
+  const labels = { osm: 'OpenStreetMap', overture: 'Overture Maps', official: 'Font oficial', merged: 'Fusionat' }
+  const colors = { osm: '#2ecc71', overture: '#3b82f6', official: '#f59e0b', merged: '#9b59b6' }
+  return (
+    <span className="poi-source-badge" style={{ background: colors[source] ?? '#64748b' }}>
+      {labels[source] ?? source}
+    </span>
+  )
+}
+
+function OvertureSection({ data }) {
+  if (!data) return null
+  return (
+    <div className="poi-overture-section">
+      <div className="poi-overture-section-title">Taxonomia Overture</div>
+      {data.hierarchy && (
+        <div className="poi-overture-hierarchy">
+          {data.hierarchy.split(' › ').map((level, i, arr) => (
+            <span key={i}>
+              <span className={`poi-hier-level poi-hier-level--${i}`}>{level}</span>
+              {i < arr.length - 1 && <span className="poi-hier-sep"> › </span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {data.basicCategory && (
+        <div className="poi-overture-row">
+          <span className="poi-overture-key">basic_category</span>
+          <span className="poi-overture-val">{data.basicCategory}</span>
+        </div>
+      )}
+      {data.primary && data.primary !== data.basicCategory && (
+        <div className="poi-overture-row">
+          <span className="poi-overture-key">taxonomy.primary</span>
+          <span className="poi-overture-val">{data.primary}</span>
+        </div>
+      )}
+      {data.alternate && (
+        <div className="poi-overture-row">
+          <span className="poi-overture-key">Alternatives</span>
+          <span className="poi-overture-val">{data.alternate}</span>
+        </div>
+      )}
+      {data.confidence != null && (
+        <div className="poi-overture-row">
+          <span className="poi-overture-key">Confiança</span>
+          <span className="poi-overture-val">
+            <span className="poi-confidence-bar" style={{ '--conf': data.confidence }}>
+              <span className="poi-confidence-fill" />
+            </span>
+            {Math.round(data.confidence * 100)}%
+          </span>
+        </div>
+      )}
+      {data.operatingStatus && (
+        <div className="poi-overture-row">
+          <span className="poi-overture-key">Estat</span>
+          <span className={`poi-status poi-status--${data.operatingStatus}`}>{data.operatingStatus}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PoiCard({ feature }) {
   const [showRaw, setShowRaw] = useState(false)
   const poi = normalizePoiFeature(feature)
@@ -52,18 +122,19 @@ function PoiCard({ feature }) {
 
   const props = feature?.properties ?? {}
   const displayTitle = poi.title || poi.subcategory || poi.category
-
-  // Raw OSM keys to show in the collapsible section (exclude our synthetic fields)
-  const syntheticKeys = new Set(['poi_category', 'poi_category_label', 'osm_type', 'osm_id', 'name'])
-  const rawEntries = Object.entries(props).filter(([k]) => !syntheticKeys.has(k))
-
   const coordText = (poi.lat != null && poi.lng != null)
     ? `${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}`
     : null
 
+  // Raw attrs: excloure claus sintètiques i claus Overture que ja mostrem
+  const overturePrefix = 'overture_'
+  const rawEntries = Object.entries(props).filter(([k]) =>
+    !POI_SYNTHETIC_KEYS.has(k) && !k.startsWith(overturePrefix) && !k.startsWith('src_') && !k.startsWith('official_'),
+  )
+
   return (
     <div className="poi-card ssf-section">
-      {/* Header: icon + title */}
+      {/* Header */}
       <div className="poi-card-header">
         {poi.icon && (
           <span className="poi-card-icon" style={{ '--poi-color': poi.color ?? '#64748b' }}>
@@ -71,38 +142,38 @@ function PoiCard({ feature }) {
           </span>
         )}
         <div className="poi-card-title-block">
-          <p className="poi-card-title">{displayTitle}</p>
+          <div className="poi-card-title-row">
+            <p className="poi-card-title">{displayTitle}</p>
+            <PoiSourceBadge source={poi.source} />
+          </div>
           <p className="poi-card-category" style={{ color: poi.color ?? '#64748b' }}>
-            {poi.category}
+            {poi.category}{poi.subcategory && poi.subcategory !== poi.category ? ` · ${poi.subcategory}` : ''}
           </p>
         </div>
       </div>
 
-      {/* Fields */}
+      {/* Camps comuns */}
       <div className="poi-fields">
-        {poi.subcategory && poi.title && (
-          <PoiField label="Subtipus" value={poi.subcategory} />
-        )}
         <PoiField label="Adreça" value={poi.address} />
         <PoiField label="Telèfon" value={poi.phone} />
         <PoiField label="Web" value={poi.website} isLink />
         <PoiField label="Operador" value={poi.operator} />
         {poi.description && <PoiField label="Descripció" value={poi.description} />}
         {coordText && <PoiField label="Coordenades" value={coordText} />}
-        {poi.osm_id && (
-          <PoiField label="OSM ID" value={poi.osm_id} />
+        {poi.osm_id && <PoiField label="OSM ID" value={poi.osm_id} />}
+        {poi.official?.sourceCategory && (
+          <PoiField label="Categoria original" value={poi.official.sourceCategory} />
         )}
       </div>
 
-      {/* Collapsible raw attributes */}
+      {/* Secció Overture (si present) */}
+      <OvertureSection data={poi.overture} />
+
+      {/* Atributs tècnics col·lapsables */}
       {rawEntries.length > 0 && (
         <div className="poi-raw-section">
-          <button
-            type="button"
-            className="poi-raw-toggle"
-            onClick={() => setShowRaw((v) => !v)}
-            aria-expanded={showRaw}
-          >
+          <button type="button" className="poi-raw-toggle"
+            onClick={() => setShowRaw((v) => !v)} aria-expanded={showRaw}>
             <span className="poi-raw-toggle-arrow">{showRaw ? '▾' : '▸'}</span>
             Atributs tècnics ({rawEntries.length})
           </button>

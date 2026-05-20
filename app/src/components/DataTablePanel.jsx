@@ -2,19 +2,17 @@ import { useMemo, useState } from 'react'
 import { getDatasetFeatures } from '../modules/sources/sourceStore'
 
 const ROW_HEIGHT = 28
-const DEFAULT_HEIGHT = 300
-const MIN_HEIGHT = 140
-const MAX_HEIGHT = 640
+export const DT_DEFAULT_HEIGHT = 300
+export const DT_MIN_HEIGHT = 140
+export const DT_MAX_HEIGHT = 640
 const TOOLBAR_H = 40
 const HANDLE_H = 6
 const HEAD_H = 30
 
-export default function DataTablePanel({ layer, onClose }) {
+export default function DataTablePanel({ layer, height = DT_DEFAULT_HEIGHT, onHeightChange, onClose }) {
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
-  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT)
-  const [scrollTop, setScrollTop] = useState(0)
 
   const allFeatures = useMemo(() => {
     if (layer.datasetId) {
@@ -37,19 +35,17 @@ export default function DataTablePanel({ layer, onClose }) {
     let result = allFeatures
     const q = search.trim().toLowerCase()
     if (q) {
-      result = result.filter((feat) => {
-        const props = feat.properties ?? {}
-        return Object.values(props).some(
+      result = result.filter((feat) =>
+        Object.values(feat.properties ?? {}).some(
           (v) => v != null && String(v).toLowerCase().includes(q),
-        )
-      })
+        ),
+      )
     }
     if (sortField) {
       result = [...result].sort((a, b) => {
         const av = a.properties?.[sortField]
         const bv = b.properties?.[sortField]
-        const an = Number(av)
-        const bn = Number(bv)
+        const an = Number(av), bn = Number(bv)
         const isNum = av != null && bv != null && !isNaN(an) && !isNaN(bn)
         const cmp = isNum ? an - bn : String(av ?? '').localeCompare(String(bv ?? ''))
         return sortDir === 'desc' ? -cmp : cmp
@@ -59,7 +55,8 @@ export default function DataTablePanel({ layer, onClose }) {
   }, [allFeatures, search, sortField, sortDir])
 
   // Virtual scroll window
-  const bodyHeight = Math.max(0, panelHeight - TOOLBAR_H - HANDLE_H - HEAD_H)
+  const [scrollTop, setScrollTop] = useState(0)
+  const bodyHeight = Math.max(0, height - TOOLBAR_H - HANDLE_H - HEAD_H)
   const visibleCount = Math.ceil(bodyHeight / ROW_HEIGHT) + 10
   const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 3)
   const endIdx = Math.min(rows.length, startIdx + visibleCount)
@@ -69,9 +66,9 @@ export default function DataTablePanel({ layer, onClose }) {
   const onResizeStart = (e) => {
     e.preventDefault()
     const startY = e.clientY
-    const startH = panelHeight
+    const startH = height
     const onMove = (ev) => {
-      setPanelHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startH + (startY - ev.clientY))))
+      onHeightChange?.(Math.min(DT_MAX_HEIGHT, Math.max(DT_MIN_HEIGHT, startH + (startY - ev.clientY))))
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
@@ -87,7 +84,7 @@ export default function DataTablePanel({ layer, onClose }) {
   }
 
   return (
-    <div className="dt-panel" style={{ height: panelHeight }}>
+    <div className="dt-panel">
       <div
         className="dt-resize-handle"
         onPointerDown={onResizeStart}
@@ -109,12 +106,7 @@ export default function DataTablePanel({ layer, onClose }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button
-          type="button"
-          className="dt-close-btn"
-          onClick={onClose}
-          aria-label="Tancar taula"
-        >
+        <button type="button" className="dt-close-btn" onClick={onClose} aria-label="Tancar taula">
           ✕
         </button>
       </div>
@@ -127,7 +119,6 @@ export default function DataTablePanel({ layer, onClose }) {
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         >
           <div className="dt-inner">
-            {/* Sticky header */}
             <div className="dt-head">
               <div className="dt-row dt-row--head">
                 <span className="dt-cell dt-cell--idx">#</span>
@@ -150,7 +141,6 @@ export default function DataTablePanel({ layer, onClose }) {
               </div>
             </div>
 
-            {/* Virtual rows */}
             <div className="dt-rows-wrap">
               {topSpace > 0 && <div style={{ height: topSpace }} aria-hidden="true" />}
               {rows.slice(startIdx, endIdx).map((feat, vi) => {

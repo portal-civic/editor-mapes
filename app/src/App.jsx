@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import LayersPanel from './components/LayersPanel'
 import MapCanvas from './components/MapCanvas'
@@ -82,7 +82,7 @@ import SpatialOverlayModal from './components/SpatialOverlayModal'
 import OsmPoiModal from './components/OsmPoiModal'
 import { buildPoiCategoricalConfig, applyPoiMarkerStyleToCategories } from './modules/osm/poiCategoryStyle'
 import LayerFilterModal from './components/LayerFilterModal'
-import DataTablePanel from './components/DataTablePanel'
+import DataTablePanel, { DT_DEFAULT_HEIGHT } from './components/DataTablePanel'
 import { fetchWfsGeoJson } from './modules/services/wfsClient'
 
 function isValidBasemapId(basemapId) {
@@ -154,6 +154,7 @@ function App() {
   const [showOsmPoiModal, setShowOsmPoiModal] = useState(false)
   const [filterModalLayerId, setFilterModalLayerId] = useState(null)
   const [dataTableLayerId, setDataTableLayerId] = useState(null)
+  const [dataTableHeight, setDataTableHeight] = useState(DT_DEFAULT_HEIGHT)
   const [isochronePickMode, setIsochronePickMode] = useState(false)
   const [isochronePickedPoint, setIsochronePickedPoint] = useState(null)
   // Resizable right sidebar — width persisted in localStorage
@@ -165,6 +166,14 @@ function App() {
     setPreset: setSidebarPreset,
     onHandleMouseDown: onSidebarHandleDown,
   } = useResizableSidebar()
+  // Invalidate Leaflet size when data table opens/closes or is resized
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      mapInstanceRef.current?.invalidateSize?.()
+    }, 80)
+    return () => clearTimeout(timer)
+  }, [dataTableLayerId, dataTableHeight])
+
   // mapComposition: aspect-ratio constraint for the map canvas area
   const [mapComposition, setMapComposition] = useState({ mode: 'auto' })
   // busyState: global progress indicator for heavy async operations
@@ -1970,7 +1979,7 @@ function App() {
 
   // Create a categorical point layer from OSM POI results.
   // selectedCategories: [{ id, label, color, icon, ... }]
-  const handleOsmPoiCreateLayer = (geojson, _layerNameIgnored, selectedCategories) => {
+  const handleOsmPoiCreateLayer = (geojson, _layerNameIgnored, selectedCategories, sourceType = 'osm') => {
     const meta = readGeoJSONMeta(geojson)
     if (!meta) return
 
@@ -2016,6 +2025,7 @@ function App() {
         labelField: 'name',
         minZoomLabels: 14,
         displayMode,
+        sourceType,
       },
       poiVisibility: null,
     }]))
@@ -2058,6 +2068,12 @@ function App() {
       )
       return { ...l, categorical: { ...(l.categorical ?? {}), categories: updatedCategories } }
     }))
+  }
+
+  const handlePoiConfigChange = (layerId, patch) => {
+    setLayers((prev) => prev.map((l) =>
+      l.id === layerId ? { ...l, poiConfig: { ...(l.poiConfig ?? {}), ...patch } } : l
+    ))
   }
 
   const handleLayerFilterChange = (layerId, filters) => {
@@ -2318,8 +2334,8 @@ function App() {
       />
 
       <main
-        className={`workspace${sidebarIsDragging ? ' workspace--resizing' : ''}`}
-        style={{ '--rp-width': `${sidebarWidth}px` }}
+        className={`workspace${sidebarIsDragging ? ' workspace--resizing' : ''}${dataTableLayerId ? ' workspace--has-table' : ''}`}
+        style={{ '--rp-width': `${sidebarWidth}px`, '--dt-height': `${dataTableHeight}px` }}
       >
         <LayersPanel
           layers={layers}
@@ -2560,6 +2576,7 @@ function App() {
                 onPoiVisibilityChange={handlePoiVisibilityChange}
                 onPoiDisplayModeChange={handlePoiDisplayModeChange}
                 onPoiApplyMarkerStyle={handlePoiApplyMarkerStyle}
+                onPoiConfigChange={handlePoiConfigChange}
                 onOpenFilterModal={setFilterModalLayerId}
                 onOpenDataTable={setDataTableLayerId}
                 panelExpanded={sidebarIsExpanded}
@@ -2580,17 +2597,19 @@ function App() {
             />
           )}
         </div>
-      </main>
 
-      {dataTableLayerId != null && (() => {
-        const dtLayer = layers.find((l) => l.id === dataTableLayerId)
-        return dtLayer ? (
-          <DataTablePanel
-            layer={dtLayer}
-            onClose={() => setDataTableLayerId(null)}
-          />
-        ) : null
-      })()}
+        {dataTableLayerId != null && (() => {
+          const dtLayer = layers.find((l) => l.id === dataTableLayerId)
+          return dtLayer ? (
+            <DataTablePanel
+              layer={dtLayer}
+              height={dataTableHeight}
+              onHeightChange={setDataTableHeight}
+              onClose={() => setDataTableLayerId(null)}
+            />
+          ) : null
+        })()}
+      </main>
     </div>
   )
 }
