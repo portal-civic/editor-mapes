@@ -19,6 +19,13 @@
  *   apiKeyEnv     — Name of the env variable that holds the API key (if any).
  *   options       — Extra Leaflet TileLayer options merged into the layer props.
  */
+// CARTO basemaps require an API key since basemaps.cartocdn.com started
+// rejecting anonymous raster tile requests (shows an "API key required"
+// watermark otherwise). Falls back to no query param when unset, rather
+// than interpolating the literal string "undefined" into the tile URL.
+const CARTO_API_KEY = import.meta.env.VITE_CARTO_API_KEY
+const cartoKeyParam = CARTO_API_KEY ? `?key=${CARTO_API_KEY}` : ''
+
 export const basemapCatalog = [
   // ── General ───────────────────────────────────────────────
   {
@@ -42,7 +49,7 @@ export const basemapCatalog = [
     id: 'carto-voyager',
     name: 'Carto Voyager',
     type: 'xyz',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png${cartoKeyParam}`,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,
@@ -51,8 +58,8 @@ export const basemapCatalog = [
     subdomains: 'abcd',
     category: 'general',
     default: false,
-    requiresApiKey: false,
-    apiKeyEnv: null,
+    requiresApiKey: true,
+    apiKeyEnv: 'VITE_CARTO_API_KEY',
     options: {},
   },
   {
@@ -78,7 +85,7 @@ export const basemapCatalog = [
     id: 'carto-positron',
     name: 'Carto Positron',
     type: 'xyz',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    url: `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png${cartoKeyParam}`,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,
@@ -87,8 +94,8 @@ export const basemapCatalog = [
     subdomains: 'abcd',
     category: 'light',
     default: false,
-    requiresApiKey: false,
-    apiKeyEnv: null,
+    requiresApiKey: true,
+    apiKeyEnv: 'VITE_CARTO_API_KEY',
     options: {},
   },
 
@@ -96,7 +103,7 @@ export const basemapCatalog = [
     id: 'carto-positron-nolabels',
     name: 'Carto Positron (sense etiquetes)',
     type: 'xyz',
-    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+    url: `https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png${cartoKeyParam}`,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,
@@ -105,8 +112,8 @@ export const basemapCatalog = [
     subdomains: 'abcd',
     category: 'light',
     default: false,
-    requiresApiKey: false,
-    apiKeyEnv: null,
+    requiresApiKey: true,
+    apiKeyEnv: 'VITE_CARTO_API_KEY',
     options: {},
   },
 
@@ -115,7 +122,7 @@ export const basemapCatalog = [
     id: 'carto-dark',
     name: 'Carto Dark Matter',
     type: 'xyz',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    url: `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${cartoKeyParam}`,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,
@@ -124,8 +131,8 @@ export const basemapCatalog = [
     subdomains: 'abcd',
     category: 'dark',
     default: false,
-    requiresApiKey: false,
-    apiKeyEnv: null,
+    requiresApiKey: true,
+    apiKeyEnv: 'VITE_CARTO_API_KEY',
     options: {},
   },
 
@@ -133,7 +140,7 @@ export const basemapCatalog = [
     id: 'carto-darkmatter-nolabels',
     name: 'Carto Dark Matter (sense etiquetes)',
     type: 'xyz',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+    url: `https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png${cartoKeyParam}`,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     thumbnail: null,
@@ -142,8 +149,8 @@ export const basemapCatalog = [
     subdomains: 'abcd',
     category: 'dark',
     default: false,
-    requiresApiKey: false,
-    apiKeyEnv: null,
+    requiresApiKey: true,
+    apiKeyEnv: 'VITE_CARTO_API_KEY',
     options: {},
   },
 
